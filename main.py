@@ -8,6 +8,7 @@ import json
 import sys
 import os
 from datetime import datetime
+from typing import Dict
 
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
@@ -15,9 +16,16 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 from config import LOGGING_CONFIG, OUTPUT_CONFIG, SIMULATION_CONFIG
 from data_acquisition import fetch_all_data
 from risk_prediction import train_risk_model
-from financial_impact import run_financial_impact_analysis
+from financial_impact import run_financial_impact_analysis, FinancialImpactSimulator
 from mitigation import generate_mitigation_recommendations
 from visualization import create_dashboard
+
+# Phase 1 Enhancements
+from sensitivity_analysis import QuickSensitivityAnalysis
+from scenario_analysis import ScenarioAnalyzer
+from model_comparison import ModelComparison
+from risk_alerts import RiskAlertSystem
+from export import ReportExporter
 
 # Configure logging
 logging.basicConfig(
@@ -180,7 +188,95 @@ def run_catia_analysis(region: str = "US_Gulf_Coast", use_mock_data: bool = True
         json.dump(results, f, indent=2, default=str)
     
     logger.info(f"✓ Report saved: {output_file}")
-    
+
+    # ========================================================================
+    # PHASE 1 ENHANCEMENTS: QUICK WINS
+    # ========================================================================
+    logger.info("\n[PHASE 1] QUICK WINS ENHANCEMENTS")
+    logger.info("-" * 80)
+
+    try:
+        # Create simulator for enhancements
+        event_frequency = len(data['historical_events']) / max(
+            data['historical_events']['year'].max() - data['historical_events']['year'].min(), 1
+        )
+        severity_params = {'mu': 15, 'sigma': 2}
+        simulator = FinancialImpactSimulator(event_frequency, severity_params)
+
+        # 1. Sensitivity Analysis
+        logger.info("\n[ENHANCEMENT 1] Sensitivity Analysis")
+        try:
+            analyzer = QuickSensitivityAnalysis(simulator)
+            sensitivity_results = analyzer.analyze({
+                'event_frequency': [0.3, 0.4, 0.5, 0.6, 0.7],
+                'severity_mu': [14, 15, 16, 17, 18]
+            })
+            analyzer.plot_tornado(sensitivity_results).write_html(
+                os.path.join(OUTPUT_CONFIG["output_dir"], "sensitivity_tornado.html")
+            )
+            analyzer.plot_sensitivity_heatmap(sensitivity_results).write_html(
+                os.path.join(OUTPUT_CONFIG["output_dir"], "sensitivity_heatmap.html")
+            )
+            logger.info(f"✓ Sensitivity analysis complete")
+            logger.info(analyzer.generate_summary(sensitivity_results))
+        except Exception as e:
+            logger.error(f"✗ Sensitivity analysis failed: {e}")
+
+        # 2. Scenario Analysis
+        logger.info("\n[ENHANCEMENT 2] Scenario Analysis")
+        try:
+            scenario_analyzer = ScenarioAnalyzer(simulator)
+            scenario_results = scenario_analyzer.run_scenarios()
+            scenario_analyzer.plot_scenarios(scenario_results).write_html(
+                os.path.join(OUTPUT_CONFIG["output_dir"], "scenarios.html")
+            )
+            scenario_analyzer.plot_return_periods(scenario_results).write_html(
+                os.path.join(OUTPUT_CONFIG["output_dir"], "return_periods.html")
+            )
+            logger.info(f"✓ Scenario analysis complete")
+            logger.info(scenario_analyzer.generate_summary(scenario_results))
+        except Exception as e:
+            logger.error(f"✗ Scenario analysis failed: {e}")
+
+        # 3. Risk Alerts
+        logger.info("\n[ENHANCEMENT 3] Risk Alerts")
+        try:
+            alert_system = RiskAlertSystem({
+                'var_max': 100,
+                'mean_loss_max': 50,
+                'loss_ratio_max': 1.1,
+                'tvar_max': 150
+            })
+
+            # Prepare metrics for alerts
+            alert_metrics = {
+                'var_95': results['risk_metrics']['risk_metrics']['var'],
+                'tvar_95': results['risk_metrics']['risk_metrics']['tvar'],
+                'mean_loss': results['risk_metrics']['descriptive_stats']['mean'],
+                'loss_ratio': 1.0  # Placeholder
+            }
+
+            alerts = alert_system.check_alerts(alert_metrics)
+            logger.info(alert_system.format_alerts())
+        except Exception as e:
+            logger.error(f"✗ Risk alerts failed: {e}")
+
+        # 4. Export Results
+        logger.info("\n[ENHANCEMENT 4] Export Results")
+        try:
+            exporter = ReportExporter(results['risk_metrics'])
+            export_paths = exporter.export_all()
+            logger.info(f"✓ JSON export: {export_paths['json']}")
+            logger.info(f"✓ CSV export: {export_paths['csv']}")
+            logger.info(f"✓ HTML export: {export_paths['html']}")
+        except Exception as e:
+            logger.error(f"✗ Export failed: {e}")
+
+        logger.info("\n✓ Phase 1 Enhancements Complete")
+
+    except Exception as e:
+        logger.error(f"✗ Phase 1 enhancements failed: {e}")
+
     # ========================================================================
     # SUMMARY
     # ========================================================================
