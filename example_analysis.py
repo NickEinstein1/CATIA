@@ -3,17 +3,14 @@ CATIA Example Analysis Script
 Demonstrates complete workflow with detailed explanations.
 """
 
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
-
-from data_acquisition import fetch_all_data
-from risk_prediction import train_risk_model
-from financial_impact import run_financial_impact_analysis
-from mitigation import generate_mitigation_recommendations
-from visualization import CATIAVisualizer
 import pandas as pd
 import json
+
+from catia.data_acquisition import fetch_all_data
+from catia.risk_prediction import train_risk_model
+from catia.financial_impact import run_financial_impact_analysis
+from catia.mitigation import generate_mitigation_recommendations
+from catia.visualization import CATIAVisualizer
 
 # ============================================================================
 # EXAMPLE 1: BASIC ANALYSIS
