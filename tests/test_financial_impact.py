@@ -4,12 +4,8 @@ Unit tests for financial impact simulation module.
 
 import pytest
 import numpy as np
-import sys
-import os
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
-
-from financial_impact import FinancialImpactSimulator, run_financial_impact_analysis
+from catia.financial_impact import FinancialImpactSimulator, run_financial_impact_analysis
 
 class TestFinancialImpactSimulator:
     """Test cases for FinancialImpactSimulator class."""

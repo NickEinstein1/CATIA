@@ -5,12 +5,8 @@ Unit tests for data acquisition module.
 import pytest
 import pandas as pd
 import numpy as np
-import sys
-import os
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
-
-from data_acquisition import DataAcquisition, fetch_all_data
+from catia.data_acquisition import DataAcquisition, fetch_all_data
 
 class TestDataAcquisition:
     """Test cases for DataAcquisition class."""
