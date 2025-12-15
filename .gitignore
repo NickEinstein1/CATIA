@@ -134,3 +134,6 @@ data/mock_*.csv
 *.tmp
 .env.local
 
+# Documentation (internal)
+Docs/
+
