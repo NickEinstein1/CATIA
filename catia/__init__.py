@@ -17,6 +17,11 @@ Modules:
     - risk_prediction: ML-based risk prediction models
     - financial_impact: Actuarial catastrophe modeling and Monte Carlo simulation
     - extreme_value: Extreme Value Theory (EVT) with GPD for tail risk modeling
+    - uncertainty: Bootstrap-based uncertainty quantification for risk metrics
+    - correlation: Copula-based peril correlation modeling
+    - ensemble: Ensemble ML models for robust risk predictions
+    - explainability: SHAP-based model interpretability
+    - backtesting: Historical validation and performance monitoring
     - mitigation: Optimization and recommendation of mitigation strategies
     - visualization: Interactive dashboards and charts
     - sensitivity_analysis: Parameter sensitivity and tornado charts
@@ -36,7 +41,7 @@ Example:
     >>> print(f"EVT VaR (95%): ${results['aggregate_metrics']['evt']['gpd_var_95']:,.0f}")
 """
 
-__version__ = "1.2.0"  # Updated for EVT/GPD tail modeling
+__version__ = "1.7.0"  # Updated for backtesting framework
 __author__ = "CATIA Development Team"
 __all__ = [
     "config",
@@ -44,6 +49,11 @@ __all__ = [
     "risk_prediction",
     "financial_impact",
     "extreme_value",
+    "uncertainty",
+    "correlation",
+    "ensemble",
+    "explainability",
+    "backtesting",
     "mitigation",
     "visualization",
     "sensitivity_analysis",
