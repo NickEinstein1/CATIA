@@ -570,7 +570,7 @@ class EnsembleRiskPredictor:
 
 
 # ============================================================================
-# HELPER FUNCTIONS
+# HELPER FUNCTIONS - Assist in system test and train of data given the different models comparison
 # ============================================================================
 
 def compare_ensemble_methods(X: np.ndarray, y_prob: np.ndarray,
