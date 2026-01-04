@@ -2,7 +2,7 @@
 
 **Catastrophe AI System for Climate Risk Modeling**
 
-CATIA is a production-ready Python library for catastrophe risk modeling. It combines climate data ingestion, ML-based risk prediction, actuarial loss simulation, and mitigation optimization into a unified framework.
+CATIA is a production-ready Python library for catastrophe risk modeling. It combines climate data ingestion, ML-based risk prediction, actuarial loss simulation, and mitigation optimization into a unified framework.This system allows us to quantify climate risks and also find solutions in the leap of Environment Sustainable Goals (ESG).
 
 ## Installation
 
@@ -34,7 +34,7 @@ results = run_financial_impact_analysis(
 # Get mitigation recommendations
 recommendations = generate_mitigation_recommendations(
     expected_annual_loss=results['expected_loss'],
-    budget=10_000_000
+    budget=10_000_000 #This is an estimation based on the analysis, kindly feel free to adjust.
 )
 ```
 
