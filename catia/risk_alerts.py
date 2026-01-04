@@ -61,6 +61,7 @@ class RiskAlert:
 
 class RiskAlertSystem:
     """Threshold-based risk monitoring and alerting system."""
+    #We monitor risk based on the var_max, mean_loww_max, and also the defined tail value_maximum threshhold
     
     def __init__(self, thresholds: Dict[str, float]):
         """
@@ -100,7 +101,7 @@ class RiskAlertSystem:
                     msg_template="VaR exceeds maximum threshold"
                 )
         
-        # Check TVaR threshold
+        # Check TVaR threshold_Severity metrics of 0.95ll
         if 'tvar_95' in metrics and 'tvar_max' in self.thresholds:
             if metrics['tvar_95'] > self.thresholds['tvar_max']:
                 self._add_alert(
