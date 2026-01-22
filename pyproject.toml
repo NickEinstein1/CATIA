@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "catia"
-version = "1.0.0"
+version = "1.7.0"
 description = "CATIA: Catastrophe AI System for Climate Risk Modeling"
 readme = "README.md"
 license = {text = "MIT"}
@@ -37,6 +37,13 @@ dependencies = [
     "urllib3>=2.0.0",
     "python-dotenv>=1.0.0",
     "pyyaml>=6.0",
+    # API Framework
+    "fastapi>=0.104.0",
+    "uvicorn>=0.24.0",
+    # Advanced ML
+    "xgboost>=2.0.0",
+    "lightgbm>=4.0.0",
+    "shap>=0.43.0",
 ]
 
 [project.optional-dependencies]
@@ -49,7 +56,7 @@ dev = [
 ]
 
 [project.scripts]
-catia = "catia.main:main"
+catia = "catia.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
