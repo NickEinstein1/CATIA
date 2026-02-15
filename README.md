@@ -74,10 +74,10 @@ All errors return a structured body with `error`, `message`, `request_id`, and `
 - **Compliance report**: Every run writes `outputs/compliance_report.html` (CAS/SOA/NAIC alignment).
 - **Uncertainty in pipeline**: Multi-peril analysis includes bootstrap uncertainty by default.
 - **Ensemble**: Set `CATIA_USE_ENSEMBLE=1` to train a voting ensemble risk model.
-- **User guide**: [docs/USER_GUIDE.md](docs/USER_GUIDE.md). **Tutorial**: [notebooks/tutorial.ipynb](notebooks/tutorial.ipynb).
+- **User guide**: [docs/USER_GUIDE.md](docs/USER_GUIDE.md). **Tutorial**: [notebooks/tutorial.ipynb](notebooks/tutorial.ipynb). **All docs**: [docs/](docs/).
 - **Drought peril** and **optional DL** (MLP): Set `CATIA_USE_DL=1` or `model_type: NeuralNetwork` in config; add `drought` to perils.
 
-## Roadmap
+## Roadmap & docs
 
 See **[ROADMAP.md](ROADMAP.md)** for the full plan. Phase A and B and C are complete.
 
