@@ -7,13 +7,23 @@ Implements robust error handling and data validation.
 import logging
 import pandas as pd
 import numpy as np
-from typing import Dict, List, Tuple, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from catia.config import API_CONFIG, DATA_CONFIG, LOGGING_CONFIG, PERIL_CONFIG, DEFAULT_PERILS
+
+# Optional cache and real connectors
+try:
+    from catia.data.cache import FileDataCache
+    from catia.data.connectors import fetch_noaa_climate_cached, fetch_worldbank_cached
+    _DATA_LAYER_AVAILABLE = True
+except ImportError:
+    FileDataCache = None
+    fetch_noaa_climate_cached = fetch_worldbank_cached = None
+    _DATA_LAYER_AVAILABLE = False
 
 # Configure logging
 logging.basicConfig(level=LOGGING_CONFIG["level"], format=LOGGING_CONFIG["format"])
@@ -24,18 +34,24 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 class DataAcquisition:
-    """Handles data fetching from multiple sources with error handling."""
+    """Handles data fetching from multiple sources with error handling, cache, and real connectors."""
     
-    def __init__(self, use_mock_data: bool = True):
+    def __init__(self, use_mock_data: bool = True, cache: Optional[Any] = None):
         """
         Initialize DataAcquisition.
         
         Args:
-            use_mock_data: If True, use mock data; otherwise fetch from APIs
+            use_mock_data: If True, use mock data; otherwise try APIs then fallback to mock
+            cache: Optional FileDataCache for caching real API responses
         """
         self.use_mock_data = use_mock_data
         self.session = self._create_session()
-        logger.info(f"DataAcquisition initialized (mock_data={use_mock_data})")
+        self._cache = cache
+        if cache is None and _DATA_LAYER_AVAILABLE and not use_mock_data:
+            cache_dir = DATA_CONFIG.get("cache_dir", "data/cache")
+            ttl = DATA_CONFIG.get("cache_ttl_seconds")
+            self._cache = FileDataCache(cache_dir, ttl) if cache_dir else None
+        logger.info("DataAcquisition initialized (mock_data=%s, cache=%s)", use_mock_data, self._cache is not None)
     
     def _create_session(self) -> requests.Session:
         """Create a requests session with retry strategy."""
@@ -52,48 +68,35 @@ class DataAcquisition:
     
     def fetch_climate_data(self, region: str, start_date: str, end_date: str) -> pd.DataFrame:
         """
-        Fetch climate data for a region.
-        
-        Args:
-            region: Geographic region (e.g., "US_Gulf_Coast")
-            start_date: Start date (YYYY-MM-DD)
-            end_date: End date (YYYY-MM-DD)
-        
-        Returns:
-            DataFrame with climate variables
+        Fetch climate data for a region. Uses cache and real connectors when use_mock_data=False.
         """
         if self.use_mock_data:
             return self._generate_mock_climate_data(region, start_date, end_date)
-        
-        try:
-            logger.info(f"Fetching climate data for {region} from {start_date} to {end_date}")
-            # Real API call would go here
-            # For now, return mock data
-            return self._generate_mock_climate_data(region, start_date, end_date)
-        except Exception as e:
-            logger.error(f"Error fetching climate data: {e}")
-            raise
+        if _DATA_LAYER_AVAILABLE and fetch_noaa_climate_cached:
+            try:
+                df = fetch_noaa_climate_cached(self._cache, region, start_date, end_date)
+                if df is not None and not df.empty:
+                    logger.info("Climate data from NOAA: %s rows for %s", len(df), region)
+                    return df
+            except Exception as e:
+                logger.warning("Real climate fetch failed, using mock: %s", e)
+        return self._generate_mock_climate_data(region, start_date, end_date)
     
     def fetch_socioeconomic_data(self, region: str) -> pd.DataFrame:
         """
-        Fetch socioeconomic data for a region.
-        
-        Args:
-            region: Geographic region
-        
-        Returns:
-            DataFrame with socioeconomic variables
+        Fetch socioeconomic data for a region. Uses cache and World Bank when use_mock_data=False.
         """
         if self.use_mock_data:
             return self._generate_mock_socioeconomic_data(region)
-        
-        try:
-            logger.info(f"Fetching socioeconomic data for {region}")
-            # Real API call would go here
-            return self._generate_mock_socioeconomic_data(region)
-        except Exception as e:
-            logger.error(f"Error fetching socioeconomic data: {e}")
-            raise
+        if _DATA_LAYER_AVAILABLE and fetch_worldbank_cached:
+            try:
+                df = fetch_worldbank_cached(self._cache, region)
+                if df is not None and not df.empty:
+                    logger.info("Socioeconomic data from World Bank for %s", region)
+                    return df
+            except Exception as e:
+                logger.warning("Real socioeconomic fetch failed, using mock: %s", e)
+        return self._generate_mock_socioeconomic_data(region)
     
     def fetch_historical_events(self, region: str, event_type: str) -> pd.DataFrame:
         """
@@ -182,6 +185,8 @@ class DataAcquisition:
             magnitude = np.random.uniform(1, 5, n_events)  # Flood severity 1-5
         elif event_type == 'wildfire':
             magnitude = np.random.uniform(1, 5, n_events)  # Fire severity 1-5
+        elif event_type == 'drought':
+            magnitude = np.random.uniform(1, 5, n_events)  # Drought severity 1-5
         else:
             magnitude = np.random.uniform(1, 10, n_events)
 

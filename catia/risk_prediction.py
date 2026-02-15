@@ -9,11 +9,17 @@ import os
 import pickle
 import numpy as np
 import pandas as pd
-from typing import Dict, Tuple, List
+from typing import Dict, List, Optional, Tuple
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
-from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, mean_squared_error
+try:
+    from sklearn.neural_network import MLPClassifier, MLPRegressor
+    _MLP_AVAILABLE = True
+except ImportError:
+    _MLP_AVAILABLE = False
+    MLPClassifier = MLPRegressor = None
 
 from catia.config import ML_CONFIG, LOGGING_CONFIG
 
@@ -105,20 +111,35 @@ class RiskPredictor:
         
         # Split data
         split_ratio = ML_CONFIG["train_test_split"]
+        rs = ML_CONFIG["hyperparameters"]["random_state"]
         X_train, X_test, y_prob_train, y_prob_test, y_sev_train, y_sev_test = train_test_split(
             X_scaled, y_probability, y_severity,
-            test_size=1-split_ratio, random_state=ML_CONFIG["hyperparameters"]["random_state"]
+            test_size=1-split_ratio, random_state=rs
         )
-        
-        # Train probability model
-        logger.info("Training probability model...")
-        self.probability_model = RandomForestClassifier(**ML_CONFIG["hyperparameters"])
-        self.probability_model.fit(X_train, y_prob_train)
-        
-        # Train severity model
-        logger.info("Training severity model...")
-        self.severity_model = RandomForestRegressor(**ML_CONFIG["hyperparameters"])
-        self.severity_model.fit(X_train, y_sev_train)
+
+        use_dl = (
+            ML_CONFIG.get("model_type") == "NeuralNetwork"
+            or os.environ.get("CATIA_USE_DL", "").lower() in ("1", "true", "yes")
+        ) and _MLP_AVAILABLE
+
+        if use_dl:
+            logger.info("Training probability model (MLP)...")
+            self.probability_model = MLPClassifier(
+                hidden_layer_sizes=(64, 32), max_iter=500, random_state=rs
+            )
+            self.probability_model.fit(X_train, y_prob_train)
+            logger.info("Training severity model (MLP)...")
+            self.severity_model = MLPRegressor(
+                hidden_layer_sizes=(64, 32), max_iter=500, random_state=rs
+            )
+            self.severity_model.fit(X_train, y_sev_train)
+        else:
+            logger.info("Training probability model...")
+            self.probability_model = RandomForestClassifier(**ML_CONFIG["hyperparameters"])
+            self.probability_model.fit(X_train, y_prob_train)
+            logger.info("Training severity model...")
+            self.severity_model = RandomForestRegressor(**ML_CONFIG["hyperparameters"])
+            self.severity_model.fit(X_train, y_sev_train)
         
         # Validate models
         self._validate_models(X_test, y_prob_test, y_sev_test)
@@ -180,8 +201,8 @@ class RiskPredictor:
         
         return prob_predictions, severity_predictions
     
-    def save_model(self, path: str = ML_CONFIG["model_path"]):
-        """Save trained models to disk."""
+    def save_model(self, path: str = ML_CONFIG["model_path"], metadata: Optional[Dict] = None):
+        """Save trained models to disk and register version."""
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, 'wb') as f:
             pickle.dump({
@@ -190,7 +211,16 @@ class RiskPredictor:
                 'scaler': self.scaler,
                 'feature_names': self.feature_names
             }, f)
-        logger.info(f"Models saved to {path}")
+        logger.info("Models saved to %s", path)
+        try:
+            from catia.model_registry import get_registry
+            reg = get_registry()
+            meta = dict(metadata or {})
+            if self.feature_names:
+                meta["n_features"] = len(self.feature_names)
+            reg.register(path, metadata=meta)
+        except Exception as e:
+            logger.debug("Model registry not updated: %s", e)
     
     def load_model(self, path: str = ML_CONFIG["model_path"]):
         """Load trained models from disk."""

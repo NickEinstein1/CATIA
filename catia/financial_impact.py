@@ -5,10 +5,27 @@ Monte Carlo simulations for loss exceedance curves and risk metrics.
 """
 
 import logging
+import time
+
 import numpy as np
 import pandas as pd
-from typing import Dict, Tuple, List
-from scipy.stats import poisson, lognorm, pareto
+from typing import Dict, List, Tuple
+
+from scipy.stats import lognorm, pareto, poisson
+
+try:
+    from joblib import Parallel, delayed
+    _JOBLIB_AVAILABLE = True
+except ImportError:
+    _JOBLIB_AVAILABLE = False
+    Parallel = delayed = None
+
+try:
+    from catia.metrics import record_simulation_duration
+    _METRICS_AVAILABLE = True
+except ImportError:
+    _METRICS_AVAILABLE = False
+    record_simulation_duration = None
 
 from catia.config import SIMULATION_CONFIG, RISK_METRICS, LOGGING_CONFIG, PERIL_CONFIG
 from catia.extreme_value import ExtremeValueAnalyzer, analyze_tail_risk
@@ -80,40 +97,82 @@ class FinancialImpactSimulator:
         
         return annual_losses
     
+    def _simulate_chunk(self, chunk_size: int, seed: int) -> np.ndarray:
+        """Run a chunk of annual loss simulations with fixed seed (for parallel reproducibility)."""
+        rng = np.random.default_rng(seed)
+        annual_losses = np.zeros(chunk_size)
+        for i in range(chunk_size):
+            num_events = poisson.rvs(self.event_frequency, random_state=rng)
+            if num_events > 0:
+                if self.severity_dist == "Lognormal":
+                    losses = lognorm.rvs(
+                        s=self.severity_params["sigma"],
+                        scale=np.exp(self.severity_params["mu"]),
+                        size=num_events,
+                        random_state=rng,
+                    )
+                elif self.severity_dist == "Pareto":
+                    losses = pareto.rvs(
+                        a=self.severity_params["shape"],
+                        scale=self.severity_params["scale"],
+                        size=num_events,
+                        random_state=rng,
+                    )
+                else:
+                    raise ValueError(f"Unknown severity distribution: {self.severity_dist}")
+                annual_losses[i] = losses.sum()
+        return annual_losses
+
     def monte_carlo_simulation(self) -> Dict:
         """
         Run Monte Carlo simulation for loss exceedance curves.
-        
-        Returns:
-            Dictionary with simulation results
+        Uses joblib for parallel execution when n_jobs is set in SIMULATION_CONFIG.
+        Records duration metric if enabled.
         """
+        start = time.time()
         num_iterations = SIMULATION_CONFIG["monte_carlo_iterations"]
-        num_years = 1  # Annual losses
-        
-        logger.info(f"Running Monte Carlo simulation ({num_iterations} iterations)...")
-        
-        # Run simulations
-        all_losses = []
-        for i in range(num_iterations):
-            annual_loss = self.simulate_annual_losses(num_years)
-            all_losses.extend(annual_loss)
-            
-            if (i + 1) % (num_iterations // 10) == 0:
-                logger.info(f"  Completed {i + 1}/{num_iterations} iterations")
-        
-        all_losses = np.array(all_losses)
-        
-        # Calculate risk metrics
+        n_jobs = SIMULATION_CONFIG.get("n_jobs", 1)
+
+        use_parallel = _JOBLIB_AVAILABLE and n_jobs != 1 and num_iterations >= 100
+        if use_parallel:
+            n_jobs = n_jobs if n_jobs > 0 else -1
+            chunk_size = max(1, num_iterations // (n_jobs * 4 if n_jobs > 0 else 32))
+            chunks = []
+            it = 0
+            while it < num_iterations:
+                size = min(chunk_size, num_iterations - it)
+                chunks.append((size, it))
+                it += size
+            base_seed = self.random_seed
+            logger.info("Running Monte Carlo simulation (%s iterations, n_jobs=%s)...", num_iterations, n_jobs)
+            results_list = Parallel(n_jobs=n_jobs)(
+                delayed(self._simulate_chunk)(size, base_seed + idx)
+                for idx, (size, _) in enumerate(chunks)
+            )
+            all_losses = np.concatenate(results_list)
+        else:
+            num_years = 1
+            logger.info("Running Monte Carlo simulation (%s iterations)...", num_iterations)
+            all_losses = []
+            for i in range(num_iterations):
+                annual_loss = self.simulate_annual_losses(num_years)
+                all_losses.extend(annual_loss)
+                if (i + 1) % max(1, num_iterations // 10) == 0:
+                    logger.info("  Completed %s/%s iterations", i + 1, num_iterations)
+            all_losses = np.array(all_losses)
+
+        duration = time.time() - start
+        if _METRICS_AVAILABLE and record_simulation_duration:
+            record_simulation_duration(duration, perils=None)
         results = {
-            'all_losses': all_losses,
-            'mean_loss': np.mean(all_losses),
-            'median_loss': np.median(all_losses),
-            'std_loss': np.std(all_losses),
-            'min_loss': np.min(all_losses),
-            'max_loss': np.max(all_losses)
+            "all_losses": all_losses,
+            "mean_loss": float(np.mean(all_losses)),
+            "median_loss": float(np.median(all_losses)),
+            "std_loss": float(np.std(all_losses)),
+            "min_loss": float(np.min(all_losses)),
+            "max_loss": float(np.max(all_losses)),
         }
-        
-        logger.info(f"Simulation complete. Mean loss: ${results['mean_loss']:,.0f}")
+        logger.info("Simulation complete. Mean loss: $%s (duration: %.2fs)", f"{results['mean_loss']:,.0f}", duration)
         return results
     
     def calculate_var_tvar(self, losses: np.ndarray) -> Dict:

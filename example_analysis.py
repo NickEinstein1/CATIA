@@ -3,13 +3,19 @@ CATIA Example Analysis Script
 Demonstrates complete workflow with detailed explanations.
 """
 
-import pandas as pd
+import os
+import sys
 import json
+import pandas as pd
 
 from catia.data_acquisition import fetch_all_data
 from catia.risk_prediction import train_risk_model
 from catia.financial_impact import run_financial_impact_analysis
-from catia.mitigation import generate_mitigation_recommendations
+from catia.mitigation import (
+    generate_mitigation_recommendations,
+    MitigationOptimizer,
+    MitigationStrategy,
+)
 from catia.visualization import CATIAVisualizer
 
 # ============================================================================
@@ -180,8 +186,6 @@ def example_custom_mitigation():
     print("\n" + "="*80)
     print("EXAMPLE 4: CUSTOM MITIGATION STRATEGY")
     print("="*80)
-    
-    from mitigation import MitigationOptimizer, MitigationStrategy
     
     # Create optimizer with custom budget
     budget = 2_000_000  # $2M budget
