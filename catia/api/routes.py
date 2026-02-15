@@ -3,19 +3,26 @@ API Routes for CATIA REST API.
 """
 
 import logging
+import os
 from datetime import datetime
 from typing import List
 
 from fastapi import APIRouter, HTTPException
 
 from catia.config import PERIL_CONFIG, DEFAULT_PERILS, SIMULATION_CONFIG
+from catia.config import OUTPUT_CONFIG
 from catia.api.schemas import (
     PerilType, PerilInfo, PerilListResponse,
     AnalysisRequest, AnalysisResponse,
     SimulationRequest, SimulationResponse,
     MitigationRequest, MitigationResponse, MitigationStrategy,
     RiskMetrics, ReturnPeriods, PerilContribution,
-    HealthResponse
+    HealthResponse,
+    ReadinessResponse,
+    ReadinessCheck,
+    JobSubmitResponse,
+    JobStatusResponse,
+    JobResultResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -34,12 +41,65 @@ mitigation_router = APIRouter(prefix="/mitigation", tags=["Mitigation"])
 
 @router.get("/health", response_model=HealthResponse, tags=["Health"])
 async def health_check():
-    """Check API health status."""
+    """Liveness: is the API process up."""
     from catia import __version__
     return HealthResponse(
         status="healthy",
         version=__version__,
         timestamp=datetime.now().isoformat()
+    )
+
+
+@router.get("/metrics", tags=["Health"])
+async def metrics_endpoint():
+    """Prometheus metrics endpoint (if CATIA_METRICS=1)."""
+    try:
+        from catia.metrics import get_registry
+        reg = get_registry()
+        if reg.enabled:
+            from fastapi.responses import PlainTextResponse
+            return PlainTextResponse(reg.to_prometheus(), media_type="text/plain")
+        return {"message": "Metrics disabled. Set CATIA_METRICS=1 to enable."}
+    except ImportError:
+        return {"message": "Metrics module not available"}
+
+
+@router.get("/ready", response_model=ReadinessResponse, tags=["Health"])
+async def readiness_check():
+    """
+    Readiness: can the API serve traffic (output dir writable, config loadable).
+    Use for Kubernetes readiness probes and load balancers.
+    """
+    from catia import __version__
+    checks = []
+    all_ok = True
+
+    # Output directory writable
+    out_dir = OUTPUT_CONFIG.get("output_dir", "outputs")
+    try:
+        os.makedirs(out_dir, exist_ok=True)
+        test_file = os.path.join(out_dir, ".ready_check")
+        with open(test_file, "w") as f:
+            f.write("")
+        os.remove(test_file)
+        checks.append(ReadinessCheck(name="output_dir", status="ok", message=f"Writable: {out_dir}"))
+    except Exception as e:
+        checks.append(ReadinessCheck(name="output_dir", status="error", message=str(e)))
+        all_ok = False
+
+    # Config loaded
+    try:
+        assert PERIL_CONFIG and SIMULATION_CONFIG
+        checks.append(ReadinessCheck(name="config", status="ok", message="Config loaded"))
+    except Exception as e:
+        checks.append(ReadinessCheck(name="config", status="error", message=str(e)))
+        all_ok = False
+
+    return ReadinessResponse(
+        ready=all_ok,
+        version=__version__,
+        timestamp=datetime.now().isoformat(),
+        checks=checks,
     )
 
 
@@ -240,4 +300,112 @@ async def run_full_analysis(request: AnalysisRequest):
     except Exception as e:
         logger.error(f"Full analysis failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# ASYNC JOB ENDPOINTS (Phase C)
+# ============================================================================
+
+def _run_analysis_job(job_id: str, request: AnalysisRequest) -> None:
+    """Background runner: run full analysis and store result."""
+    from catia.api.jobs import set_job_running, set_job_result, set_job_error
+    try:
+        set_job_running(job_id)
+        from main import run_catia_analysis
+        raw = run_catia_analysis(
+            region=request.region,
+            use_mock_data=request.use_mock_data,
+            perils=[p.value for p in request.perils],
+        )
+        # Build AnalysisResponse from main.py result
+        rm = raw["risk_metrics"]
+        agg = rm["descriptive_stats"]
+        risk = rm["risk_metrics"]
+        rp = rm["return_periods"]
+        contributions = raw.get("multi_peril_contributions", [])
+        result = AnalysisResponse(
+            region=raw["metadata"]["region"],
+            perils_analyzed=raw["metadata"]["perils_analyzed"],
+            timestamp=raw["metadata"]["timestamp"],
+            risk_metrics=RiskMetrics(
+                mean=agg["mean"],
+                median=agg["median"],
+                std=agg["std"],
+                var_95=risk["var"],
+                tvar_95=risk["tvar"],
+            ),
+            return_periods=ReturnPeriods(
+                year_10=rp["10_year"],
+                year_25=rp["25_year"],
+                year_50=rp["50_year"],
+                year_100=rp["100_year"],
+                year_250=rp["250_year"],
+                year_500=rp["500_year"],
+                year_1000=rp["1000_year"],
+            ),
+            peril_contributions=[PerilContribution(**c) for c in contributions],
+            mitigation_summary=raw["mitigation_summary"],
+            data_summary={
+                "climate_records": raw["data_summary"]["climate_records"],
+                "socioeconomic_records": raw["data_summary"]["socioeconomic_records"],
+                "historical_events": raw["data_summary"]["historical_events"],
+            },
+        )
+        set_job_result(job_id, result.model_dump())
+    except Exception as e:
+        logger.exception("Job %s failed", job_id)
+        set_job_error(job_id, str(e))
+
+
+@analysis_router.post("/jobs", response_model=JobSubmitResponse)
+async def submit_analysis_job(request: AnalysisRequest):
+    """Submit a long-running analysis job. Poll GET /analysis/jobs/{job_id} for status."""
+    import threading
+    from catia.api.jobs import create_job, get_job
+
+    job_id = create_job()
+    job = get_job(job_id)
+    t = threading.Thread(target=_run_analysis_job, args=(job_id, request))
+    t.daemon = True
+    t.start()
+    return JobSubmitResponse(
+        job_id=job_id,
+        status=job["status"],
+        created_at=job["created_at"],
+    )
+
+
+@analysis_router.get("/jobs/{job_id}", response_model=JobStatusResponse)
+async def get_job_status(job_id: str):
+    """Get job status (pending | running | completed | failed)."""
+    from catia.api.jobs import get_job
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return JobStatusResponse(
+        job_id=job["job_id"],
+        status=job["status"],
+        created_at=job["created_at"],
+        completed_at=job.get("completed_at"),
+        error=job.get("error"),
+    )
+
+
+@analysis_router.get("/jobs/{job_id}/result")
+async def get_job_result(job_id: str):
+    """Get job result when completed. Returns 202 if still pending/running, 200 with result if done."""
+    from catia.api.jobs import get_job, get_job_result as get_result
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job["status"] == "failed":
+        return JobResultResponse(job_id=job_id, status="failed", error=job.get("error"))
+    if job["status"] != "completed":
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=202,
+            content={"job_id": job_id, "status": job["status"], "message": "Job not yet completed"},
+        )
+    result = get_result(job_id)
+    return JobResultResponse(job_id=job_id, status="completed", result=AnalysisResponse(**result))
 
