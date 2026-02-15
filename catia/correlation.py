@@ -55,6 +55,15 @@ DEFAULT_PERIL_CORRELATIONS = {
     ('earthquake', 'flood'): 0.05,
     ('earthquake', 'wildfire'): 0.10,
     ('earthquake', 'earthquake'): 1.0,
+    ('earthquake', 'drought'): 0.0,
+    ('drought', 'hurricane'): -0.25,
+    ('drought', 'flood'): -0.30,
+    ('drought', 'wildfire'): 0.40,
+    ('drought', 'earthquake'): 0.0,
+    ('drought', 'drought'): 1.0,
+    ('hurricane', 'drought'): -0.25,
+    ('flood', 'drought'): -0.30,
+    ('wildfire', 'drought'): 0.40,
 }
 
 

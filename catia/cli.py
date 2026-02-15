@@ -52,7 +52,7 @@ Examples:
         "--perils", "-p",
         nargs="+",
         default=DEFAULT_PERILS,
-        choices=["hurricane", "flood", "wildfire", "earthquake"],
+        choices=["hurricane", "flood", "wildfire", "earthquake", "drought"],
         help="Perils to analyze (default: all)"
     )
     

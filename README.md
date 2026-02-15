@@ -53,6 +53,34 @@ recommendations = generate_mitigation_recommendations(
 | `backtesting` | Historical validation and model monitoring |
 | `mitigation` | Budget-constrained optimization of risk reduction strategies |
 
+## API & Production
+
+Run the REST API with `catia --api --port 8000` or `uvicorn catia.api.app:app --reload`.
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/v1/health` | Liveness probe |
+| `GET /api/v1/ready` | Readiness (output dir, config) |
+| `GET /api/v1/perils/` | List perils and config |
+| `POST /api/v1/simulation/run` | Multi-peril Monte Carlo |
+| `POST /api/v1/analysis/run` | Full analysis pipeline |
+| `POST /api/v1/mitigation/optimize` | Mitigation recommendations |
+
+All errors return a structured body with `error`, `message`, `request_id`, and `timestamp`. Send `X-Request-ID` for tracing. Every CLI/main run includes a **run ID** and **config snapshot** in the report for reproducibility and audit.
+
+## Phase C (Best-in-Class)
+
+- **Async jobs**: `POST /api/v1/analysis/jobs` to submit long runs; poll `GET /api/v1/analysis/jobs/{id}` and `GET /api/v1/analysis/jobs/{id}/result`.
+- **Compliance report**: Every run writes `outputs/compliance_report.html` (CAS/SOA/NAIC alignment).
+- **Uncertainty in pipeline**: Multi-peril analysis includes bootstrap uncertainty by default.
+- **Ensemble**: Set `CATIA_USE_ENSEMBLE=1` to train a voting ensemble risk model.
+- **User guide**: [docs/USER_GUIDE.md](docs/USER_GUIDE.md). **Tutorial**: [notebooks/tutorial.ipynb](notebooks/tutorial.ipynb).
+- **Drought peril** and **optional DL** (MLP): Set `CATIA_USE_DL=1` or `model_type: NeuralNetwork` in config; add `drought` to perils.
+
+## Roadmap
+
+See **[ROADMAP.md](ROADMAP.md)** for the full plan. Phase A and B and C are complete.
+
 ## Running Tests
 
 ```bash

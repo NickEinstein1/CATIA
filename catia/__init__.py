@@ -44,7 +44,9 @@ Example:
 __version__ = "1.7.0"  # Updated for backtesting framework
 __author__ = "CATIA Development Team"
 __all__ = [
+    "audit",
     "config",
+    "data",
     "data_acquisition",
     "risk_prediction",
     "financial_impact",
@@ -59,8 +61,11 @@ __all__ = [
     "sensitivity_analysis",
     "scenario_analysis",
     "model_comparison",
+    "model_registry",
     "risk_alerts",
     "export",
+    "logging_config",
+    "metrics",
 ]
 
 # Convenience imports for commonly used items

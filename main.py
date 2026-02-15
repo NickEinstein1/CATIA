@@ -12,7 +12,16 @@ from typing import Dict
 import numpy as np
 
 from catia.config import LOGGING_CONFIG, OUTPUT_CONFIG, SIMULATION_CONFIG, PERIL_CONFIG, DEFAULT_PERILS
+from catia.audit import generate_run_id, create_audit_metadata
 from catia.data_acquisition import fetch_all_data, fetch_single_peril_data
+
+try:
+    from catia.logging_config import setup_structured_logging
+    from catia.metrics import record_analysis_run
+    _OBSERVABILITY_AVAILABLE = True
+except ImportError:
+    _OBSERVABILITY_AVAILABLE = False
+    setup_structured_logging = record_analysis_run = None
 from catia.risk_prediction import train_risk_model
 from catia.financial_impact import (
     run_financial_impact_analysis,
@@ -30,15 +39,18 @@ from catia.model_comparison import ModelComparison
 from catia.risk_alerts import RiskAlertSystem
 from catia.export import ReportExporter
 
-# Configure logging
-logging.basicConfig(
-    level=LOGGING_CONFIG["level"],
-    format=LOGGING_CONFIG["format"],
-    handlers=[
-        logging.FileHandler(LOGGING_CONFIG["log_file"]),
-        logging.StreamHandler()
-    ]
-)
+# Configure logging (structured if env var set)
+if _OBSERVABILITY_AVAILABLE and setup_structured_logging:
+    setup_structured_logging(LOGGING_CONFIG["level"])
+else:
+    logging.basicConfig(
+        level=LOGGING_CONFIG["level"],
+        format=LOGGING_CONFIG["format"],
+        handlers=[
+            logging.FileHandler(LOGGING_CONFIG["log_file"]),
+            logging.StreamHandler()
+        ]
+    )
 logger = logging.getLogger(__name__)
 
 # ============================================================================
@@ -60,10 +72,15 @@ def run_catia_analysis(region: str = "US_Gulf_Coast",
         Dictionary with all analysis results
     """
     perils = perils or DEFAULT_PERILS
+    run_id = generate_run_id()
+    audit = create_audit_metadata(run_id, region, perils, use_mock_data)
+    if _OBSERVABILITY_AVAILABLE and record_analysis_run:
+        record_analysis_run(region, perils)
 
     logger.info("=" * 80)
     logger.info("CATIA: Catastrophe AI System for Climate Risk Modeling")
     logger.info("=" * 80)
+    logger.info(f"Run ID: {run_id}")
     logger.info(f"Analysis Region: {region}")
     logger.info(f"Perils: {', '.join(perils)}")
     logger.info(f"Timestamp: {datetime.now().isoformat()}")
@@ -100,6 +117,22 @@ def run_catia_analysis(region: str = "US_Gulf_Coast",
             data['historical_events']
         )
         logger.info("✓ Risk prediction model trained and saved")
+        # Phase C: Optional ensemble (set CATIA_USE_ENSEMBLE=1)
+        if os.environ.get("CATIA_USE_ENSEMBLE", "").lower() in ("1", "true", "yes"):
+            try:
+                from catia.ensemble import RobustVotingClassifier, RobustVotingRegressor, get_base_classifiers, get_base_regressors
+                X, y_prob, y_sev = predictor.prepare_features(
+                    data["climate"], data["socioeconomic"], data["historical_events"]
+                )
+                from sklearn.preprocessing import StandardScaler
+                X_scaled = StandardScaler().fit_transform(X)
+                clf = RobustVotingClassifier(estimators=get_base_classifiers(), voting="soft", auto_weight=True)
+                reg = RobustVotingRegressor(estimators=get_base_regressors(), auto_weight=True)
+                clf.fit(X_scaled, y_prob)
+                reg.fit(X_scaled, y_sev)
+                logger.info("✓ Ensemble (voting) risk model trained")
+            except Exception as e:
+                logger.debug("Ensemble step skipped: %s", e)
     except Exception as e:
         logger.error(f"✗ Risk prediction failed: {e}")
         raise
@@ -111,8 +144,12 @@ def run_catia_analysis(region: str = "US_Gulf_Coast",
     logger.info("-" * 80)
 
     try:
-        # Run multi-peril analysis
-        multi_peril_results = run_multi_peril_analysis(perils)
+        # Run multi-peril analysis (Phase C: include uncertainty in default pipeline)
+        multi_peril_results = run_multi_peril_analysis(
+            perils,
+            include_uncertainty=True,
+            n_bootstrap=200,
+        )
 
         logger.info(f"✓ Monte Carlo simulations: {SIMULATION_CONFIG['monte_carlo_iterations']} iterations")
         logger.info(f"✓ Perils simulated: {', '.join(perils)}")
@@ -193,11 +230,13 @@ def run_catia_analysis(region: str = "US_Gulf_Coast",
     
     results = {
         'metadata': {
+            'run_id': run_id,
             'region': region,
             'timestamp': datetime.now().isoformat(),
             'use_mock_data': use_mock_data,
             'perils_analyzed': perils
         },
+        'audit': audit,
         'data_summary': {
             'climate_records': len(data['climate']),
             'socioeconomic_records': len(data['socioeconomic']),
@@ -216,8 +255,16 @@ def run_catia_analysis(region: str = "US_Gulf_Coast",
     output_file = os.path.join(OUTPUT_CONFIG["output_dir"], "catia_report.json")
     with open(output_file, 'w') as f:
         json.dump(results, f, indent=2, default=str)
-    
     logger.info(f"✓ Report saved: {output_file}")
+
+    # Phase C: Compliance report (full audit trail + CAS/SOA/NAIC)
+    try:
+        from catia.compliance import generate_compliance_report
+        compliance_path = os.path.join(OUTPUT_CONFIG["output_dir"], "compliance_report.html")
+        generate_compliance_report(results["audit"], results, output_path=compliance_path)
+        logger.info(f"✓ Compliance report: {compliance_path}")
+    except Exception as e:
+        logger.debug("Compliance report skipped: %s", e)
 
     # ========================================================================
     # PHASE 1 ENHANCEMENTS: QUICK WINS

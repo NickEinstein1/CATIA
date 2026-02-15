@@ -56,7 +56,8 @@ ML_CONFIG = {
     "train_test_split": 0.8,
     "cross_validation_folds": 5,
     "feature_scaling": "StandardScaler",
-    "model_path": "models/risk_model.pkl"
+    "model_path": "models/risk_model.pkl",
+    "registry_path": os.environ.get("CATIA_MODEL_REGISTRY", "models/registry.json"),
 }
 
 # ============================================================================
@@ -69,7 +70,8 @@ SIMULATION_CONFIG = {
     "frequency_distribution": "Poisson",  # Poisson for event frequency
     "severity_distribution": "Lognormal",  # Lognormal or Pareto for losses
     "random_seed": 42,
-    "correlation_matrix_path": "data/peril_correlations.csv"
+    "correlation_matrix_path": "data/peril_correlations.csv",
+    "n_jobs": int(os.environ.get("CATIA_N_JOBS", "-1")),  # -1 = all cores for parallel MC
 }
 
 # ============================================================================
@@ -144,6 +146,16 @@ PERIL_CONFIG = {
         "regions": ["US_West_Coast", "Japan", "Turkey", "Chile", "Indonesia"],
         "seasonality": list(range(1, 13)),  # Year-round
         "magnitude_scale": "Richter/Moment Magnitude (1-10)"
+    },
+    "drought": {
+        "name": "Drought",
+        "description": "Prolonged deficit in precipitation affecting water supply and agriculture",
+        "frequency_base": 0.4,
+        "severity_params": {"mu": 12, "sigma": 1.8},
+        "climate_drivers": ["temperature", "precipitation"],
+        "regions": ["US_Midwest", "US_Southwest", "Australia", "Africa", "South_Asia"],
+        "seasonality": [5, 6, 7, 8, 9],  # Warm season
+        "magnitude_scale": "Drought severity (1-5)"
     }
 }
 
@@ -157,6 +169,8 @@ DEFAULT_PERILS = ["hurricane", "flood", "wildfire", "earthquake"]
 DATA_CONFIG = {
     "mock_data_enabled": True,  # Set to False for real API calls
     "mock_data_path": "data/",
+    "cache_dir": os.environ.get("CATIA_CACHE_DIR", "data/cache"),
+    "cache_ttl_seconds": int(os.environ.get("CATIA_CACHE_TTL", "86400")),  # 24h default
     "climate_variables": [
         "temperature",
         "precipitation",
@@ -182,9 +196,10 @@ DATA_CONFIG = {
 # ============================================================================
 
 LOGGING_CONFIG = {
-    "level": "INFO",  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+    "level": os.environ.get("CATIA_LOG_LEVEL", "INFO"),
     "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    "log_file": "logs/catia.log"
+    "log_file": "logs/catia.log",
+    "structured": os.environ.get("CATIA_STRUCTURED_LOGS", "").lower() in ("1", "true", "yes"),
 }
 
 # ============================================================================
