@@ -17,6 +17,7 @@ class PerilType(str, Enum):
     FLOOD = "flood"
     WILDFIRE = "wildfire"
     EARTHQUAKE = "earthquake"
+    DROUGHT = "drought"
 
 
 # ============================================================================
@@ -143,8 +144,70 @@ class AnalysisResponse(BaseModel):
 
 
 class HealthResponse(BaseModel):
-    """Health check response."""
+    """Health check response (liveness)."""
     status: str
     version: str
     timestamp: str
+
+
+class ErrorDetail(BaseModel):
+    """Single validation or error detail."""
+    loc: Optional[List[str]] = None
+    msg: str
+    type: Optional[str] = None
+
+
+class ErrorResponse(BaseModel):
+    """Structured error response for all API errors."""
+    success: bool = False
+    error: str = Field(..., description="Error type or code")
+    message: str = Field(..., description="Human-readable message")
+    detail: Optional[Any] = Field(default=None, description="Extra detail (e.g. validation errors)")
+    request_id: Optional[str] = Field(default=None, description="Request ID for tracing")
+    timestamp: str = Field(..., description="ISO timestamp")
+    path: Optional[str] = Field(default=None, description="Request path")
+
+
+class ReadinessCheck(BaseModel):
+    """Single readiness check result."""
+    name: str
+    status: str  # "ok" | "degraded" | "error"
+    message: Optional[str] = None
+
+
+class ReadinessResponse(BaseModel):
+    """Readiness check response (dependencies, disk, config)."""
+    ready: bool
+    version: str
+    timestamp: str
+    checks: List[ReadinessCheck]
+
+
+# ============================================================================
+# ASYNC JOB SCHEMAS (Phase C)
+# ============================================================================
+
+class JobSubmitResponse(BaseModel):
+    """Response after submitting an async analysis job."""
+    job_id: str
+    status: str = "pending"
+    message: str = "Job submitted. Poll GET /api/v1/analysis/jobs/{job_id} for status."
+    created_at: str
+
+
+class JobStatusResponse(BaseModel):
+    """Job status (pending | running | completed | failed)."""
+    job_id: str
+    status: str
+    created_at: str
+    completed_at: Optional[str] = None
+    error: Optional[str] = None
+
+
+class JobResultResponse(BaseModel):
+    """Full result when job is completed (same shape as AnalysisResponse)."""
+    job_id: str
+    status: str = "completed"
+    result: Optional[AnalysisResponse] = None
+    error: Optional[str] = None
 
