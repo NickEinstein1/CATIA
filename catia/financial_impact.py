@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from typing import Dict, List, Tuple
 
-from scipy.stats import lognorm, pareto, poisson
+from scipy.stats import gamma, lognorm, pareto, poisson, weibull_min
 
 try:
     from joblib import Parallel, delayed
@@ -36,6 +36,15 @@ from catia.correlation import PerilCorrelationSimulator, simulate_correlated_per
 logging.basicConfig(level=LOGGING_CONFIG["level"], format=LOGGING_CONFIG["format"])
 logger = logging.getLogger(__name__)
 
+
+def _spliced_threshold_from_config(severity_params: Dict) -> float:
+    """Compute spliced threshold as percentile of body (lognormal) from config."""
+    body_s = severity_params.get("body_sigma", severity_params.get("sigma", 2))
+    body_scale = np.exp(severity_params.get("body_mu", severity_params.get("mu", 15)))
+    q = SIMULATION_CONFIG.get("spliced_threshold_percentile", 90) / 100.0
+    return float(lognorm.ppf(q, s=body_s, scale=body_scale))
+
+
 # ============================================================================
 # FINANCIAL IMPACT SIMULATOR CLASS
 # ============================================================================
@@ -50,15 +59,76 @@ class FinancialImpactSimulator:
         Args:
             event_frequency: Expected number of events per year (lambda for Poisson)
             severity_params: Parameters for severity distribution
-                - For lognormal: {'mu': mean_log, 'sigma': std_log}
-                - For pareto: {'scale': scale, 'shape': shape}
+                - Lognormal: {'mu': mean_log, 'sigma': std_log}
+                - Pareto: {'scale': scale, 'shape': shape}
+                - Weibull: {'c': shape, 'scale': scale}
+                - Gamma: {'a': shape, 'scale': scale}
+                - Spliced: {'body_mu', 'body_sigma', 'tail_shape', 'tail_scale', 'threshold'} or from config
         """
         self.event_frequency = event_frequency
         self.severity_params = severity_params
-        self.severity_dist = SIMULATION_CONFIG["severity_distribution"]
+        self.severity_dist = SIMULATION_CONFIG.get("severity_distribution", "Lognormal")
         self.random_seed = SIMULATION_CONFIG["random_seed"]
         np.random.seed(self.random_seed)
         logger.info(f"FinancialImpactSimulator initialized (frequency={event_frequency})")
+
+    def _sample_severity(self, size: int, rng=None) -> np.ndarray:
+        """Sample severity losses from the configured distribution."""
+        kw = {} if rng is None else {"random_state": rng}
+        p = self.severity_params
+        if self.severity_dist == "Lognormal":
+            return lognorm.rvs(
+                s=p["sigma"],
+                scale=np.exp(p["mu"]),
+                size=size,
+                **kw,
+            )
+        if self.severity_dist == "Pareto":
+            return pareto.rvs(
+                p["shape"],
+                scale=p["scale"],
+                size=size,
+                **kw,
+            )
+        if self.severity_dist == "Weibull":
+            return weibull_min.rvs(
+                c=p["c"],
+                scale=p["scale"],
+                size=size,
+                **kw,
+            )
+        if self.severity_dist == "Gamma":
+            return gamma.rvs(
+                a=p["a"],
+                scale=p["scale"],
+                size=size,
+                **kw,
+            )
+        if self.severity_dist == "Spliced":
+            return self._sample_spliced(size, rng)
+        raise ValueError(f"Unknown severity distribution: {self.severity_dist}")
+
+    def _sample_spliced(self, size: int, rng=None) -> np.ndarray:
+        """Spliced: body (lognormal) below threshold, tail (Pareto) above."""
+        p = self.severity_params
+        threshold = p.get("threshold")
+        if threshold is None:
+            threshold = _spliced_threshold_from_config(p)
+        body_s = self.severity_params.get("body_sigma", self.severity_params.get("sigma", 2))
+        body_scale = np.exp(self.severity_params.get("body_mu", self.severity_params.get("mu", 15)))
+        p_body = float(lognorm.cdf(threshold, s=body_s, scale=body_scale))
+        kw = {} if rng is None else {"random_state": rng}
+        U = (rng.uniform(0, 1, size=size) if rng is not None else np.random.uniform(0, 1, size=size))
+        out = np.empty(size)
+        n_body = (U <= p_body).sum()
+        n_tail = size - n_body
+        if n_body > 0:
+            u_body = (U[U <= p_body] / p_body) if p_body > 0 else np.zeros(n_body)
+            out[U <= p_body] = lognorm.ppf(np.clip(u_body, 1e-10, 1 - 1e-10), s=body_s, scale=body_scale)
+        if n_tail > 0:
+            tail_shape = self.severity_params.get("tail_shape", 2.0)
+            out[U > p_body] = pareto.rvs(tail_shape, scale=threshold, size=n_tail, **kw)
+        return out
     
     def simulate_annual_losses(self, num_years: int = 1) -> np.ndarray:
         """
@@ -78,20 +148,7 @@ class FinancialImpactSimulator:
             
             # Simulate loss for each event
             if num_events > 0:
-                if self.severity_dist == "Lognormal":
-                    losses = lognorm.rvs(
-                        s=self.severity_params['sigma'],
-                        scale=np.exp(self.severity_params['mu']),
-                        size=num_events
-                    )
-                elif self.severity_dist == "Pareto":
-                    losses = pareto.rvs(
-                        a=self.severity_params['shape'],
-                        scale=self.severity_params['scale'],
-                        size=num_events
-                    )
-                else:
-                    raise ValueError(f"Unknown severity distribution: {self.severity_dist}")
+                losses = self._sample_severity(num_events, rng=np.random)
                 
                 annual_losses[year] = losses.sum()
         
@@ -104,22 +161,7 @@ class FinancialImpactSimulator:
         for i in range(chunk_size):
             num_events = poisson.rvs(self.event_frequency, random_state=rng)
             if num_events > 0:
-                if self.severity_dist == "Lognormal":
-                    losses = lognorm.rvs(
-                        s=self.severity_params["sigma"],
-                        scale=np.exp(self.severity_params["mu"]),
-                        size=num_events,
-                        random_state=rng,
-                    )
-                elif self.severity_dist == "Pareto":
-                    losses = pareto.rvs(
-                        a=self.severity_params["shape"],
-                        scale=self.severity_params["scale"],
-                        size=num_events,
-                        random_state=rng,
-                    )
-                else:
-                    raise ValueError(f"Unknown severity distribution: {self.severity_dist}")
+                losses = self._sample_severity(num_events, rng=rng)
                 annual_losses[i] = losses.sum()
         return annual_losses
 
