@@ -1,10 +1,20 @@
 """
 Configuration settings for CATIA system.
 Manages API endpoints, model parameters, and simulation settings.
+
+Environment-based config: place a .env file in the project root (or set env vars).
+Supported: CATIA_*, NOAA_API_TOKEN. See docs/RUNBOOK.md and docs/NEXT.md.
 """
 
 import os
 from typing import Dict, Any
+
+# Load .env so CATIA_*, NOAA_API_TOKEN, etc. are available
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 # ============================================================================
 # API CONFIGURATION
@@ -68,10 +78,13 @@ SIMULATION_CONFIG = {
     "monte_carlo_iterations": 10000,
     "confidence_level": 0.95,  # 95% for VaR/TVaR
     "frequency_distribution": "Poisson",  # Poisson for event frequency
-    "severity_distribution": "Lognormal",  # Lognormal or Pareto for losses
+    # Lognormal | Pareto | Weibull | Gamma | Spliced
+    "severity_distribution": os.environ.get("CATIA_SEVERITY_DIST", "Lognormal"),
     "random_seed": 42,
     "correlation_matrix_path": "data/peril_correlations.csv",
     "n_jobs": int(os.environ.get("CATIA_N_JOBS", "-1")),  # -1 = all cores for parallel MC
+    # Spliced severity: body below threshold, tail above (e.g. Lognormal + Pareto)
+    "spliced_threshold_percentile": 90,
 }
 
 # ============================================================================
