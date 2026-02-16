@@ -5,6 +5,7 @@ Unit tests for financial impact simulation module.
 import pytest
 import numpy as np
 
+from catia.config import SIMULATION_CONFIG
 from catia.financial_impact import FinancialImpactSimulator, run_financial_impact_analysis
 
 class TestFinancialImpactSimulator:
@@ -76,6 +77,54 @@ class TestFinancialImpactSimulator:
         # Higher return periods should have higher losses
         assert return_periods['10_year'] <= return_periods['100_year']
         assert return_periods['100_year'] <= return_periods['1000_year']
+
+    def test_weibull_severity(self):
+        """Test Weibull severity distribution (shape c, scale)."""
+        old_dist = SIMULATION_CONFIG.get("severity_distribution")
+        SIMULATION_CONFIG["severity_distribution"] = "Weibull"
+        try:
+            sim = FinancialImpactSimulator(0.5, {"c": 2.0, "scale": 1e6})
+            losses = sim.simulate_annual_losses(num_years=200)
+            assert len(losses) == 200
+            assert np.all(losses >= 0)
+            assert np.mean(losses) >= 0
+        finally:
+            SIMULATION_CONFIG["severity_distribution"] = old_dist or "Lognormal"
+
+    def test_gamma_severity(self):
+        """Test Gamma severity distribution (shape a, scale)."""
+        old_dist = SIMULATION_CONFIG.get("severity_distribution")
+        SIMULATION_CONFIG["severity_distribution"] = "Gamma"
+        try:
+            sim = FinancialImpactSimulator(0.5, {"a": 2.0, "scale": 5e5})
+            losses = sim.simulate_annual_losses(num_years=200)
+            assert len(losses) == 200
+            assert np.all(losses >= 0)
+            assert np.mean(losses) >= 0
+        finally:
+            SIMULATION_CONFIG["severity_distribution"] = old_dist or "Lognormal"
+
+    def test_spliced_severity(self):
+        """Test Spliced severity (lognormal body + Pareto tail)."""
+        old_dist = SIMULATION_CONFIG.get("severity_distribution")
+        SIMULATION_CONFIG["severity_distribution"] = "Spliced"
+        try:
+            # threshold optional; if omitted uses config percentile of body
+            sim = FinancialImpactSimulator(
+                0.5,
+                {
+                    "body_mu": 15,
+                    "body_sigma": 2,
+                    "tail_shape": 2.0,
+                    "threshold": 5e6,
+                },
+            )
+            losses = sim.simulate_annual_losses(num_years=200)
+            assert len(losses) == 200
+            assert np.all(losses >= 0)
+            assert np.mean(losses) >= 0
+        finally:
+            SIMULATION_CONFIG["severity_distribution"] = old_dist or "Lognormal"
     
     def test_aggregate_metrics(self, simulator):
         """Test aggregate metrics calculation."""
