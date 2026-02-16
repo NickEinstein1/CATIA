@@ -117,6 +117,41 @@ def run_catia_analysis(region: str = "US_Gulf_Coast",
             data['historical_events']
         )
         logger.info("✓ Risk prediction model trained and saved")
+
+        # Optional SHAP feature importance (set CATIA_USE_SHAP=1)
+        if os.environ.get("CATIA_USE_SHAP", "").lower() in ("1", "true", "yes"):
+            try:
+                from catia.explainability import RiskExplainer, SHAP_AVAILABLE
+                if SHAP_AVAILABLE:
+                    X, _, _ = predictor.prepare_features(
+                        data["climate"], data["socioeconomic"], data["historical_events"]
+                    )
+                    X_scaled = predictor.scaler.transform(X)
+                    if hasattr(X_scaled, "values"):
+                        X_scaled = X_scaled
+                    X_arr = np.asarray(X_scaled)
+                    explainer = RiskExplainer(
+                        predictor.probability_model,
+                        feature_names=predictor.feature_names,
+                        background_samples=min(100, max(10, len(X_arr) // 5)),
+                    )
+                    explainer.fit(X_arr)
+                    importance = explainer.get_global_importance(X_arr)
+                    out_dir = OUTPUT_CONFIG.get("output_dir", "outputs")
+                    os.makedirs(out_dir, exist_ok=True)
+                    fi_path = os.path.join(out_dir, "feature_importance.json")
+                    with open(fi_path, "w") as f:
+                        json.dump({
+                            "feature_names": importance.feature_names,
+                            "importance_scores": importance.importance_scores.tolist(),
+                            "ranking": [(n, float(v)) for n, v in importance.ranking],
+                        }, f, indent=2)
+                    logger.info(f"✓ Feature importance written: {fi_path}")
+                else:
+                    logger.debug("SHAP not available; feature importance skipped")
+            except Exception as e:
+                logger.debug("SHAP step skipped: %s", e)
+
         # Phase C: Optional ensemble (set CATIA_USE_ENSEMBLE=1)
         if os.environ.get("CATIA_USE_ENSEMBLE", "").lower() in ("1", "true", "yes"):
             try:
