@@ -70,7 +70,7 @@ def get_base_classifiers(random_state: int = 42) -> Dict[str, BaseEstimator]:
             n_estimators=100, max_depth=5, random_state=random_state
         ),
         'ada': AdaBoostClassifier(
-            n_estimators=50, random_state=random_state, algorithm='SAMME'
+            n_estimators=50, random_state=random_state
         ),
         'mlp': MLPClassifier(
             hidden_layer_sizes=(50, 25), max_iter=500, random_state=random_state
