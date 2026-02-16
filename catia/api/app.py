@@ -25,7 +25,7 @@ from catia.api.routes import (
     simulation_router,
     mitigation_router
 )
-from catia.api.middleware import RequestIDMiddleware
+from catia.api.middleware import RequestIDMiddleware, RateLimitMiddleware
 from catia.api.schemas import ErrorResponse
 
 # Configure logging
@@ -71,6 +71,8 @@ CATIA provides comprehensive catastrophe modeling capabilities including:
 
 # Request ID first (so it's available in exception handlers)
 app.add_middleware(RequestIDMiddleware)
+# Rate limit expensive endpoints (order: last added = first executed after request)
+app.add_middleware(RateLimitMiddleware)
 
 # CORS
 app.add_middleware(
