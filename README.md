@@ -1,95 +1,100 @@
 # CATIA
 
-**Catastrophe AI System for Climate Risk Modeling**
+**Catastrophe AI for Climate Risk Modeling** — a production-grade platform that unifies data, ML, actuarial simulation, and mitigation optimization for multi-peril climate risk.
 
-CATIA is a production-ready Python library for catastrophe risk modeling. It combines climate data ingestion, ML-based risk prediction, actuarial loss simulation, and mitigation optimization into a unified framework.This system allows us to quantify climate risks and also find solutions in the leap of Environment Sustainable Goals (ESG).
+---
+
+## Why CATIA
+
+- **End-to-end** — Ingest climate data, train risk models, run Monte Carlo simulations, and optimize mitigation in one pipeline.
+- **Actuarially rigorous** — Frequency–severity models, VaR/TVaR, return periods, EVT tail modeling, and copula-based multi-peril correlation.
+- **Explainable & auditable** — Optional SHAP feature importance, compliance reports (CAS/SOA/NAIC), run IDs, and config snapshots.
+- **Production-ready** — REST API with health checks, rate limiting, async jobs, structured errors, and observability.
+
+---
 
 ## Installation
 
 ```bash
-pip install -e .
+cd CATIA
+python3 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -e ".[dev]" -r requirements.txt
 ```
+
+---
 
 ## Quick Start
 
+**Full pipeline (data → model → simulation → mitigation → report):**
+
 ```python
-from catia.data_acquisition import fetch_climate_data
-from catia.risk_prediction import train_risk_model
-from catia.financial_impact import run_financial_impact_analysis
-from catia.mitigation import generate_mitigation_recommendations
+from catia.main import run_catia_analysis
 
-# Fetch climate data
-climate_data = fetch_climate_data(use_mock=True)
-
-# Train risk model
-model = train_risk_model(climate_data)
-
-# Run financial simulation
-results = run_financial_impact_analysis(
-    annual_frequency=2.5,
-    mean_severity=50_000_000,
-    n_simulations=10_000
+results = run_catia_analysis(
+    region="US_Gulf_Coast",
+    use_mock_data=True,
+    perils=["hurricane", "flood"]
 )
-
-# Get mitigation recommendations
-recommendations = generate_mitigation_recommendations(
-    expected_annual_loss=results['expected_loss'],
-    budget=10_000_000 #This is an estimation based on the analysis, kindly feel free to adjust.
-)
+# Outputs: report JSON, dashboards, compliance report, optional feature importance
 ```
 
-## Key Capabilities
+**REST API:**
 
-| Module | Description |
-|--------|-------------|
-| `data_acquisition` | Climate data from NOAA, ECMWF; socioeconomic data from World Bank |
-| `risk_prediction` | ML models for catastrophe probability and severity |
-| `financial_impact` | Monte Carlo simulation with frequency-severity models |
-| `extreme_value` | EVT/GPD tail modeling for 100-1000 year events |
-| `uncertainty` | Bootstrap confidence intervals for all risk metrics |
-| `correlation` | Copula-based multi-peril dependency modeling |
-| `ensemble` | Voting and stacking ensembles for robust predictions |
-| `explainability` | SHAP-based model interpretability |
-| `backtesting` | Historical validation and model monitoring |
-| `mitigation` | Budget-constrained optimization of risk reduction strategies |
+```bash
+uvicorn catia.api.app:app --reload --port 8000
+# Docs: http://localhost:8000/docs
+```
 
-## API & Production
+**CLI:** `catia --api --port 8000`
 
-Run the REST API with `catia --api --port 8000` or `uvicorn catia.api.app:app --reload`.
+---
+
+## Capabilities
+
+| Area | Features |
+|------|----------|
+| **Data** | NOAA/ECMWF/World Bank connectors; cache; mock data for development |
+| **Risk model** | Probability & severity models (RF, GB, optional MLP); ensemble (`CATIA_USE_ENSEMBLE=1`); model registry |
+| **Simulation** | Multi-peril Monte Carlo; Lognormal, Pareto, Weibull, Gamma, spliced severity; parallel runs; VaR/TVaR, return periods |
+| **Tail & uncertainty** | EVT/GPD; bootstrap confidence intervals; correlation (Gaussian/t/Clayton/Gumbel copulas) |
+| **Explainability** | SHAP feature importance (`CATIA_USE_SHAP=1`); written to `outputs/feature_importance.json` |
+| **Mitigation** | Budget-constrained optimization; cost–benefit analysis; priority strategies |
+| **API** | Health/ready; rate limiting; async jobs; request IDs; structured errors |
+
+---
+
+## API Overview
 
 | Endpoint | Description |
-|----------|-------------|
-| `GET /api/v1/health` | Liveness probe |
-| `GET /api/v1/ready` | Readiness (output dir, config) |
+|----------|--------------|
+| `GET /api/v1/health` | Liveness |
+| `GET /api/v1/ready` | Readiness |
 | `GET /api/v1/perils/` | List perils and config |
 | `POST /api/v1/simulation/run` | Multi-peril Monte Carlo |
 | `POST /api/v1/analysis/run` | Full analysis pipeline |
+| `POST /api/v1/analysis/jobs` | Submit async job; poll `GET .../jobs/{id}` and `.../jobs/{id}/result` |
 | `POST /api/v1/mitigation/optimize` | Mitigation recommendations |
 
-All errors return a structured body with `error`, `message`, `request_id`, and `timestamp`. Send `X-Request-ID` for tracing. Every CLI/main run includes a **run ID** and **config snapshot** in the report for reproducibility and audit.
+---
 
-## Phase C (Best-in-Class)
+## Documentation
 
-- **Async jobs**: `POST /api/v1/analysis/jobs` to submit long runs; poll `GET /api/v1/analysis/jobs/{id}` and `GET /api/v1/analysis/jobs/{id}/result`.
-- **Compliance report**: Every run writes `outputs/compliance_report.html` (CAS/SOA/NAIC alignment).
-- **Uncertainty in pipeline**: Multi-peril analysis includes bootstrap uncertainty by default.
-- **Ensemble**: Set `CATIA_USE_ENSEMBLE=1` to train a voting ensemble risk model.
-- **User guide**: [docs/USER_GUIDE.md](docs/USER_GUIDE.md). **Tutorial**: [notebooks/tutorial.ipynb](notebooks/tutorial.ipynb). **All docs**: [docs/](docs/).
-- **Drought peril** and **optional DL** (MLP): Set `CATIA_USE_DL=1` or `model_type: NeuralNetwork` in config; add `drought` to perils.
+- **[User guide](docs/USER_GUIDE.md)** — Concepts and pipeline
+- **[Tutorial](notebooks/tutorial.ipynb)** — Step-by-step notebook
+- **[Roadmap](docs/ROADMAP.md)** — Strategy and phases
+- **[Runbook](docs/RUNBOOK.md)** — Run API, env vars, troubleshooting
+- **[Docs index](docs/INDEX.md)** — Full documentation map
 
-## Roadmap & docs
+---
 
-See **[ROADMAP.md](ROADMAP.md)** for the full plan. Phase A and B and C are complete.
-
-## Running Tests
+## Tests
 
 ```bash
-pytest tests/ -v
+pytest tests/ -v --tb=short
 ```
+
+---
 
 ## Compliance
 
-- CAS Catastrophe Modeling Guidelines
-- SOA Risk Management Framework
-- NAIC Model Act (insurance applications)
-
+Designed for alignment with **CAS** catastrophe modeling guidelines, **SOA** risk management frameworks, and **NAIC** model act requirements for insurance applications.
