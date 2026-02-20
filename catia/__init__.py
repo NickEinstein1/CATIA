@@ -64,6 +64,8 @@ __all__ = [
     "model_registry",
     "risk_alerts",
     "export",
+    "exposure",
+    "vulnerability",
     "logging_config",
     "metrics",
 ]
