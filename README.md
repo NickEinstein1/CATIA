@@ -52,7 +52,7 @@ uvicorn catia.api.app:app --reload --port 8000
 ## Capabilities
 
 | Area | Features |
-|------|----------|
+| ---- | -------- |
 | **Data** | NOAA/ECMWF/World Bank connectors; cache; mock data for development |
 | **Risk model** | Probability & severity models (RF, GB, optional MLP); ensemble (`CATIA_USE_ENSEMBLE=1`); model registry |
 | **Simulation** | Multi-peril Monte Carlo; Lognormal, Pareto, Weibull, Gamma, spliced severity; parallel runs; VaR/TVaR, return periods |
@@ -66,13 +66,14 @@ uvicorn catia.api.app:app --reload --port 8000
 ## API Overview
 
 | Endpoint | Description |
-|----------|--------------|
+| -------- | ----------- |
 | `GET /api/v1/health` | Liveness |
 | `GET /api/v1/ready` | Readiness |
 | `GET /api/v1/perils/` | List perils and config |
 | `POST /api/v1/simulation/run` | Multi-peril Monte Carlo |
 | `POST /api/v1/analysis/run` | Full analysis pipeline |
 | `POST /api/v1/analysis/jobs` | Submit async job; poll `GET .../jobs/{id}` and `.../jobs/{id}/result` |
+| `POST /api/v1/analysis/stress` | Solvency-II-style stress scenarios (baseline or quick sim + stressed metrics) |
 | `POST /api/v1/mitigation/optimize` | Mitigation recommendations |
 
 ---
@@ -82,6 +83,7 @@ uvicorn catia.api.app:app --reload --port 8000
 - **[User guide](docs/USER_GUIDE.md)** — Concepts and pipeline
 - **[Tutorial](notebooks/tutorial.ipynb)** — Step-by-step notebook
 - **[Roadmap](docs/ROADMAP.md)** — Strategy and phases
+- **[CAT modeling next](docs/CAT_MODELING_NEXT.md)** — What’s next for best-in-class catastrophe modeling (exposure, vulnerability, event set, spatial)
 - **[Runbook](docs/RUNBOOK.md)** — Run API, env vars, troubleshooting
 - **[Docs index](docs/INDEX.md)** — Full documentation map
 
