@@ -176,6 +176,20 @@ PERIL_CONFIG = {
 DEFAULT_PERILS = ["hurricane", "flood", "wildfire", "earthquake"]
 
 # ============================================================================
+# EXPOSURE & VULNERABILITY (CAT modeling)
+# ============================================================================
+# Intensity distribution per peril for exposure-based loss: sample intensity per event.
+# Units: hurricane=wind_speed_mph, flood=depth_ft, wildfire=index_0_100,
+#        earthquake=MMI_1_12, drought=severity_0_5.
+INTENSITY_DISTRIBUTION = {
+    "hurricane": {"dist": "weibull", "scale": 85, "shape": 2.0},   # wind speed mph
+    "flood": {"dist": "weibull", "scale": 3.0, "shape": 1.5},      # depth ft
+    "wildfire": {"dist": "weibull", "scale": 45, "shape": 2.0},   # intensity 0-100
+    "earthquake": {"dist": "weibull", "scale": 7.0, "shape": 2.5}, # MMI
+    "drought": {"dist": "weibull", "scale": 2.5, "shape": 1.8},    # severity 0-5
+}
+
+# ============================================================================
 # DATA CONFIGURATION
 # ============================================================================
 
@@ -221,6 +235,7 @@ LOGGING_CONFIG = {
 
 OUTPUT_CONFIG = {
     "output_dir": "outputs/",
+    "jobs_dir": os.environ.get("CATIA_JOBS_DIR", "outputs/jobs"),  # Persistent job store
     "report_format": "json",  # json, csv, html
     "visualization_format": "html",  # html, png, pdf
     "save_intermediate_results": True
