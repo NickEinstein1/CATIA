@@ -1,0 +1,39 @@
+---
+description: Markdown style for docs and README — lint-clean, matches .markdownlint.json
+globs: "**/*.md"
+alwaysApply: false
+---
+
+# Markdown standards (lint-clean)
+
+When creating or editing any `.md` file in this project, follow these rules so markdownlint passes with zero errors.
+
+## Tables
+
+- **Separator row**: Use one space between each pipe and dashes. Match column count to the header.
+- **Good**: `| col1 | col2 |` then `| ---- | ---- |`
+- **Bad**: `|col1|col2|` or `|---|------|` (no spaces, or inconsistent)
+
+## Fenced code blocks
+
+- **Always** specify a language on the opening fence (no bare ` ``` `).
+- Use `text` for file trees, diagrams, sample output, or non-code: ` ```text `
+- Use `bash` for shell commands, `python` for Python, `json` for JSON, etc.
+
+## Structure
+
+- **One** blank line after every heading (MD022).
+- **One** blank line before and after lists (MD032).
+- **One** blank line before and after fenced code blocks (MD031).
+- **One** trailing newline at end of file (MD012); no extra blank lines at EOF.
+- **No** multiple consecutive blank lines; use a single blank line between blocks.
+
+## Checklist before saving .md
+
+1. Tables: separator row has `| --- | --- |` style (spaces around dashes).
+2. Every ` ``` ` has a language (e.g. ` ```text `, ` ```bash `).
+3. Blank line after each `##` / `###` heading.
+4. Blank line before/after lists and code blocks.
+5. File ends with exactly one newline.
+
+Run `npx markdownlint-cli2 "README.md" "docs/*.md"` to verify; target 0 errors.
