@@ -5,7 +5,7 @@ Provides scenario-based stress testing for catastrophe models.
 
 import logging
 import numpy as np
-from typing import Dict, List, Any
+from typing import Any, Dict, List, Optional
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
@@ -47,8 +47,83 @@ PREDEFINED_SCENARIOS = {
         'description': 'Below-average catastrophe activity',
         'frequency_multiplier': 0.6,
         'severity_multiplier': 0.8
-    }
+    },
+    # Solvency-II-style regulatory stress scenarios
+    'solvency_frequency_shock': {
+        'name': 'Solvency II: Frequency Shock',
+        'description': '50% increase in event frequency (regulatory stress)',
+        'frequency_multiplier': 1.5,
+        'severity_multiplier': 1.0
+    },
+    'solvency_severity_shock': {
+        'name': 'Solvency II: Severity Shock',
+        'description': '30% increase in loss severity (regulatory stress)',
+        'frequency_multiplier': 1.0,
+        'severity_multiplier': 1.3
+    },
+    'solvency_combined_shock': {
+        'name': 'Solvency II: Combined Shock',
+        'description': 'Frequency +50% and severity +30%',
+        'frequency_multiplier': 1.5,
+        'severity_multiplier': 1.3
+    },
 }
+
+
+def apply_stress_scenarios(
+    baseline_metrics: Dict[str, Any],
+    scenario_ids: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """
+    Apply predefined stress scenarios to baseline risk metrics (Solvency-II-style).
+    Does not run new simulations; applies multiplicative shocks to metrics.
+
+    Args:
+        baseline_metrics: Dict with keys:
+            - mean (float)
+            - var_95 (float)
+            - tvar_95 (float)
+            - return_periods (dict with keys like "10_year", "100_year", etc.)
+        scenario_ids: Optional list of scenario keys (default: all except baseline).
+
+    Returns:
+        Dict with "baseline" (copy of baseline_metrics) and "scenarios" (dict of
+        scenario_id -> { name, description, mean, var_95, tvar_95, return_periods }).
+    """
+    scenarios = PREDEFINED_SCENARIOS if scenario_ids is None else {
+        k: v for k, v in PREDEFINED_SCENARIOS.items()
+        if k in scenario_ids
+    }
+    mean_b = float(baseline_metrics.get("mean", 0))
+    var_b = float(baseline_metrics.get("var_95", 0))
+    tvar_b = float(baseline_metrics.get("tvar_95", 0))
+    rp_b = baseline_metrics.get("return_periods") or {}
+
+    result = {"baseline": baseline_metrics.copy(), "scenarios": {}}
+
+    for sid, sc in scenarios.items():
+        if sid == "baseline":
+            result["scenarios"]["baseline"] = {
+                "name": sc["name"],
+                "description": sc["description"],
+                "mean": mean_b,
+                "var_95": var_b,
+                "tvar_95": tvar_b,
+                "return_periods": dict(rp_b),
+            }
+            continue
+        f_mult = sc.get("frequency_multiplier", 1.0)
+        s_mult = sc.get("severity_multiplier", 1.0)
+        result["scenarios"][sid] = {
+            "name": sc.get("name", sid),
+            "description": sc.get("description", ""),
+            "mean": mean_b * f_mult * s_mult,
+            "var_95": var_b * s_mult,
+            "tvar_95": tvar_b * s_mult,
+            "return_periods": {k: v * s_mult for k, v in rp_b.items()},
+        }
+
+    return result
 
 # Peril-specific scenarios with tailored multipliers
 PERIL_SCENARIOS = {
