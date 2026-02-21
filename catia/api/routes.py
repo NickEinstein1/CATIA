@@ -23,6 +23,9 @@ from catia.api.schemas import (
     JobSubmitResponse,
     JobStatusResponse,
     JobResultResponse,
+    StressScenarioRequest,
+    StressScenarioResponse,
+    StressedMetrics,
 )
 
 logger = logging.getLogger(__name__)
@@ -152,20 +155,48 @@ async def get_peril(peril_id: PerilType):
 
 @simulation_router.post("/run", response_model=SimulationResponse)
 async def run_simulation(request: SimulationRequest):
-    """Run Monte Carlo financial impact simulation."""
-    from catia.financial_impact import MultiPerilSimulator
+    """Run Monte Carlo financial impact simulation. Optional exposure uses loss = exposure × vulnerability."""
+    from catia.financial_impact import MultiPerilSimulator, run_multi_peril_analysis
 
     try:
         perils = [p.value for p in request.perils]
-        simulator = MultiPerilSimulator(perils=perils)
-        results = simulator.simulate_all_perils(num_iterations=request.num_iterations)
-        contributions_df = simulator.get_peril_contribution(results)
+        if request.exposure and len(request.exposure) > 0:
+            from catia.exposure import ExposureStore
+            from catia.vulnerability import VulnerabilitySet
+            store = ExposureStore()
+            for rec in request.exposure:
+                store.add_record(
+                    region=rec.region,
+                    tiv=rec.tiv,
+                    line_of_business=rec.line_of_business,
+                    construction_type=rec.construction_type,
+                    occupancy=rec.occupancy,
+                    peril=rec.peril,
+                )
+            vuln = VulnerabilitySet()
+            out = run_multi_peril_analysis(
+                perils=perils,
+                exposure_store=store,
+                vulnerability_set=vuln,
+                include_evt=False,
+                include_uncertainty=False,
+                num_iterations=request.num_iterations,
+            )
+            results = out["results"]
+            contributions_df = out["contributions"]
+            import pandas as pd
+            contributions_df = pd.DataFrame(contributions_df)
+        else:
+            simulator = MultiPerilSimulator(perils=perils)
+            results = simulator.simulate_all_perils(num_iterations=request.num_iterations)
+            contributions_df = simulator.get_peril_contribution(results)
 
         agg = results['aggregate']['metrics']
 
+        n_iter = request.num_iterations or SIMULATION_CONFIG["monte_carlo_iterations"]
         return SimulationResponse(
             perils_analyzed=perils,
-            num_iterations=request.num_iterations or SIMULATION_CONFIG["monte_carlo_iterations"],
+            num_iterations=n_iter,
             aggregate_metrics=RiskMetrics(
                 mean=agg['descriptive_stats']['mean'],
                 median=agg['descriptive_stats']['median'],
@@ -300,6 +331,46 @@ async def run_full_analysis(request: AnalysisRequest):
     except Exception as e:
         logger.error(f"Full analysis failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# STRESS SCENARIOS (Solvency-II-style)
+# ============================================================================
+
+@analysis_router.post("/stress", response_model=StressScenarioResponse)
+async def run_stress_scenarios(request: StressScenarioRequest):
+    """
+    Apply predefined stress scenarios to baseline risk metrics.
+    Either provide baseline_metrics or let the API run a quick simulation to get baseline.
+    """
+    from catia.scenario_analysis import apply_stress_scenarios, PREDEFINED_SCENARIOS
+
+    baseline = request.baseline_metrics
+    if baseline is None:
+        # Run quick multi-peril simulation for baseline
+        from catia.financial_impact import run_multi_peril_analysis
+        perils = [p.value for p in (request.perils or [PerilType.HURRICANE, PerilType.FLOOD])]
+        orig_iter = SIMULATION_CONFIG.get("monte_carlo_iterations")
+        try:
+            SIMULATION_CONFIG["monte_carlo_iterations"] = min(2000, orig_iter or 10000)
+            sim = run_multi_peril_analysis(perils, include_uncertainty=False, include_correlation=False)
+        finally:
+            SIMULATION_CONFIG["monte_carlo_iterations"] = orig_iter
+        agg = sim["aggregate_metrics"]
+        baseline = {
+            "mean": agg["descriptive_stats"]["mean"],
+            "var_95": agg["risk_metrics"]["var"],
+            "tvar_95": agg["risk_metrics"]["tvar"],
+            "return_periods": dict(agg["return_periods"]),
+        }
+
+    if "return_periods" not in baseline:
+        baseline["return_periods"] = {}
+    out = apply_stress_scenarios(baseline, request.scenario_ids)
+    return StressScenarioResponse(
+        baseline=out["baseline"],
+        scenarios={k: StressedMetrics(**v) for k, v in out["scenarios"].items()},
+    )
 
 
 # ============================================================================
