@@ -34,6 +34,16 @@ class AnalysisRequest(BaseModel):
     use_mock_data: bool = Field(default=True, description="Use mock data (True) or real APIs (False)")
 
 
+class ExposureRecord(BaseModel):
+    """Single exposure record: region and total insured value (TIV)."""
+    region: str = Field(..., description="Geographic region or location id")
+    tiv: float = Field(..., gt=0, description="Total insured value (USD)")
+    line_of_business: Optional[str] = Field(default=None, description="e.g. residential, commercial")
+    construction_type: Optional[str] = Field(default=None, description="Construction class")
+    occupancy: Optional[str] = Field(default=None, description="Occupancy type")
+    peril: Optional[str] = Field(default=None, description="Peril filter if exposure is peril-specific")
+
+
 class SimulationRequest(BaseModel):
     """Request model for financial simulation."""
     perils: List[PerilType] = Field(
@@ -41,6 +51,10 @@ class SimulationRequest(BaseModel):
         description="Perils to simulate"
     )
     num_iterations: Optional[int] = Field(default=None, description="Monte Carlo iterations (uses config default if None)")
+    exposure: Optional[List[ExposureRecord]] = Field(
+        default=None,
+        description="Optional exposure records for loss = exposure × vulnerability; if provided, simulation uses exposure-based loss",
+    )
 
 
 class MitigationRequest(BaseModel):
@@ -210,4 +224,40 @@ class JobResultResponse(BaseModel):
     status: str = "completed"
     result: Optional[AnalysisResponse] = None
     error: Optional[str] = None
+
+
+# ============================================================================
+# STRESS SCENARIOS (Solvency-II-style)
+# ============================================================================
+
+class StressScenarioRequest(BaseModel):
+    """Request for predefined stress scenarios."""
+    baseline_metrics: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Optional baseline (mean, var_95, tvar_95, return_periods). If omitted, a quick simulation is run."
+    )
+    scenario_ids: Optional[List[str]] = Field(
+        default=None,
+        description="Optional list of scenario keys (e.g. solvency_frequency_shock). If omitted, all predefined scenarios are applied."
+    )
+    perils: Optional[List[PerilType]] = Field(
+        default=None,
+        description="Used only when baseline_metrics is omitted, to run quick simulation."
+    )
+
+
+class StressedMetrics(BaseModel):
+    """Risk metrics under one stress scenario."""
+    name: str
+    description: str
+    mean: float
+    var_95: float
+    tvar_95: float
+    return_periods: Dict[str, float]
+
+
+class StressScenarioResponse(BaseModel):
+    """Response with baseline and stressed metrics."""
+    baseline: Dict[str, Any]
+    scenarios: Dict[str, StressedMetrics]
 
