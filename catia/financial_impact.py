@@ -9,7 +9,11 @@ import time
 
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
+
+if TYPE_CHECKING:
+    from catia.exposure import ExposureStore
+    from catia.vulnerability import VulnerabilitySet
 
 from scipy.stats import gamma, lognorm, pareto, poisson, weibull_min
 
@@ -27,10 +31,25 @@ except ImportError:
     _METRICS_AVAILABLE = False
     record_simulation_duration = None
 
-from catia.config import SIMULATION_CONFIG, RISK_METRICS, LOGGING_CONFIG, PERIL_CONFIG
+from catia.config import (
+    INTENSITY_DISTRIBUTION,
+    PERIL_CONFIG,
+    LOGGING_CONFIG,
+    RISK_METRICS,
+    SIMULATION_CONFIG,
+)
 from catia.extreme_value import ExtremeValueAnalyzer, analyze_tail_risk
 from catia.uncertainty import RiskMetricUncertainty, quantify_risk_uncertainty
 from catia.correlation import PerilCorrelationSimulator, simulate_correlated_perils
+
+try:
+    from catia.exposure import ExposureStore
+    from catia.vulnerability import VulnerabilitySet
+    _EXPOSURE_AVAILABLE = True
+except ImportError:
+    _EXPOSURE_AVAILABLE = False
+    ExposureStore = None  # type: ignore
+    VulnerabilitySet = None  # type: ignore
 
 # Configure logging
 logging.basicConfig(level=LOGGING_CONFIG["level"], format=LOGGING_CONFIG["format"])
@@ -650,6 +669,108 @@ class MultiPerilSimulator:
 
 
 # ============================================================================
+# EXPOSURE-BASED SIMULATION (loss = exposure × vulnerability)
+# ============================================================================
+
+def _sample_intensity(peril: str, size: int, rng: np.random.Generator) -> np.ndarray:
+    """Sample hazard intensity for a peril using INTENSITY_DISTRIBUTION (e.g. Weibull)."""
+    cfg = INTENSITY_DISTRIBUTION.get(peril, {"dist": "weibull", "scale": 50, "shape": 2.0})
+    if cfg.get("dist") == "weibull":
+        scale = cfg.get("scale", 50)
+        shape = cfg.get("shape", 2.0)
+        return weibull_min.rvs(shape, scale=scale, size=size, random_state=rng)
+    # Fallback: uniform over a range
+    return rng.uniform(0, 100, size=size)
+
+
+def _simulate_exposure_based_one_year(
+    exposure_store: "ExposureStore",
+    vulnerability_set: "VulnerabilitySet",
+    perils: List[str],
+    rng: np.random.Generator,
+) -> Tuple[Dict[str, float], float]:
+    """
+    Simulate one year of losses using exposure × vulnerability.
+    Returns (peril_annual_losses dict, aggregate_annual_loss).
+    """
+    records = exposure_store.records()
+    if not records:
+        return {p: 0.0 for p in perils}, 0.0
+
+    total_tiv = exposure_store.get_total_tiv()
+    peril_losses = {p: 0.0 for p in perils}
+
+    for peril in perils:
+        freq = PERIL_CONFIG.get(peril, {}).get("frequency_base", 0.5)
+        n_events = rng.poisson(freq)
+        if n_events == 0:
+            continue
+        intensities = _sample_intensity(peril, n_events, rng)
+        for intensity in intensities:
+            damage_ratio = vulnerability_set.damage_ratio(peril, float(intensity))
+            # Event loss = sum over exposure of TIV * damage_ratio (single intensity applied to all)
+            event_loss = total_tiv * damage_ratio
+            peril_losses[peril] += event_loss
+
+    aggregate = sum(peril_losses.values())
+    return peril_losses, aggregate
+
+
+def run_exposure_based_simulation(
+    exposure_store: "ExposureStore",
+    vulnerability_set: "VulnerabilitySet",
+    perils: List[str],
+    num_iterations: int = None,
+    random_seed: int = None,
+) -> Dict:
+    """
+    Run Monte Carlo simulation using exposure × vulnerability.
+    Returns same structure as MultiPerilSimulator.simulate_all_perils() for downstream compatibility.
+    """
+    if not _EXPOSURE_AVAILABLE or ExposureStore is None or VulnerabilitySet is None:
+        raise RuntimeError("Exposure and vulnerability modules required for exposure-based simulation")
+    num_iterations = num_iterations or SIMULATION_CONFIG["monte_carlo_iterations"]
+    random_seed = random_seed or SIMULATION_CONFIG["random_seed"]
+    rng = np.random.default_rng(random_seed)
+
+    by_peril_losses = {p: np.zeros(num_iterations) for p in perils}
+    aggregate_losses = np.zeros(num_iterations)
+
+    for i in range(num_iterations):
+        peril_annual, agg = _simulate_exposure_based_one_year(
+            exposure_store, vulnerability_set, perils, rng
+        )
+        for p in perils:
+            by_peril_losses[p][i] = peril_annual[p]
+        aggregate_losses[i] = agg
+
+    results = {"by_peril": {}, "aggregate": {}, "correlation_used": False}
+    aggregate_simulator = FinancialImpactSimulator(1.0, {"mu": 15, "sigma": 2})
+
+    for peril in perils:
+        losses = by_peril_losses[peril]
+        sim = FinancialImpactSimulator(
+            PERIL_CONFIG.get(peril, {}).get("frequency_base", 0.5),
+            PERIL_CONFIG.get(peril, {}).get("severity_params", {"mu": 15, "sigma": 2}),
+        )
+        results["by_peril"][peril] = {
+            "name": PERIL_CONFIG.get(peril, {}).get("name", peril),
+            "losses": losses,
+            "metrics": sim.calculate_aggregate_metrics(losses),
+        }
+
+    results["aggregate"] = {
+        "losses": aggregate_losses,
+        "metrics": aggregate_simulator.calculate_aggregate_metrics(aggregate_losses),
+    }
+    logger.info(
+        "Exposure-based simulation complete. Mean aggregate loss: $%s",
+        f"{results['aggregate']['metrics']['descriptive_stats']['mean']:,.0f}",
+    )
+    return results
+
+
+# ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
 
@@ -699,7 +820,10 @@ def run_multi_peril_analysis(perils: List[str] = None,
                              include_uncertainty: bool = False,
                              include_correlation: bool = True,
                              copula_type: str = "t",
-                             n_bootstrap: int = 300) -> Dict:
+                             n_bootstrap: int = 300,
+                             num_iterations: Optional[int] = None,
+                             exposure_store: Optional["ExposureStore"] = None,
+                             vulnerability_set: Optional["VulnerabilitySet"] = None) -> Dict:
     """
     Run financial impact analysis across multiple perils.
 
@@ -710,20 +834,31 @@ def run_multi_peril_analysis(perils: List[str] = None,
         include_correlation: Whether to use copula-based peril correlation
         copula_type: Type of copula ('gaussian', 't', 'gumbel', 'clayton')
         n_bootstrap: Number of bootstrap samples for uncertainty
+        num_iterations: Override Monte Carlo iterations (uses config default if None)
+        exposure_store: If set with vulnerability_set, use exposure × vulnerability loss
+        vulnerability_set: If set with exposure_store, use exposure-based simulation
 
     Returns:
         Dictionary with multi-peril analysis results
     """
-    simulator = MultiPerilSimulator(
-        perils,
-        use_correlation=include_correlation,
-        copula_type=copula_type
-    )
-    results = simulator.simulate_all_perils()
-    contributions = simulator.get_peril_contribution(results)
+    perils = perils or list(PERIL_CONFIG.keys())
+
+    if exposure_store is not None and vulnerability_set is not None and _EXPOSURE_AVAILABLE:
+        results = run_exposure_based_simulation(
+            exposure_store, vulnerability_set, perils, num_iterations=num_iterations
+        )
+        contributions = MultiPerilSimulator(perils, use_correlation=False).get_peril_contribution(results)
+    else:
+        simulator = MultiPerilSimulator(
+            perils,
+            use_correlation=include_correlation,
+            copula_type=copula_type
+        )
+        results = simulator.simulate_all_perils()
+        contributions = simulator.get_peril_contribution(results)
 
     output = {
-        'perils': simulator.perils,
+        'perils': perils,
         'results': results,
         'contributions': contributions.to_dict('records'),
         'aggregate_metrics': results['aggregate']['metrics'],
