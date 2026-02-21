@@ -8,6 +8,16 @@ import numpy as np
 from catia.config import SIMULATION_CONFIG
 from catia.financial_impact import FinancialImpactSimulator, run_financial_impact_analysis
 
+
+@pytest.fixture(autouse=True)
+def force_single_process():
+    """Use n_jobs=1 to avoid joblib/loky process pool (fails in sandbox/restricted envs)."""
+    orig = SIMULATION_CONFIG.get("n_jobs", 1)
+    SIMULATION_CONFIG["n_jobs"] = 1
+    yield
+    SIMULATION_CONFIG["n_jobs"] = orig
+
+
 class TestFinancialImpactSimulator:
     """Test cases for FinancialImpactSimulator class."""
     
