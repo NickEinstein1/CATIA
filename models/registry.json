@@ -30,5 +30,21 @@
     "metadata": {
       "n_features": 9
     }
+  },
+  {
+    "version_id": "v_20260219_160203",
+    "path": "/Users/einstein/Documents/Projects/CATIA/models/risk_model.pkl",
+    "created_at": "2026-02-19T16:02:03.001898",
+    "metadata": {
+      "n_features": 9
+    }
+  },
+  {
+    "version_id": "v_20260219_160203",
+    "path": "/Users/einstein/Documents/Projects/CATIA/models/risk_model.pkl",
+    "created_at": "2026-02-19T16:02:03.101240",
+    "metadata": {
+      "n_features": 9
+    }
   }
 ]
