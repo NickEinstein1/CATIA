@@ -85,6 +85,7 @@ uvicorn catia.api.app:app --reload --port 8000
 - **[Roadmap](docs/ROADMAP.md)** — Strategy and phases
 - **[CAT modeling next](docs/CAT_MODELING_NEXT.md)** — What’s next for best-in-class catastrophe modeling (exposure, vulnerability, event set, spatial)
 - **[Runbook](docs/RUNBOOK.md)** — Run API, env vars, troubleshooting
+- **[Research and citation](docs/RESEARCH_AND_CITATION.md)** — Cite CATIA, reproducibility, model cards
 - **[Docs index](docs/INDEX.md)** — Full documentation map
 
 ---
