@@ -46,20 +46,39 @@ class ModelRegistry:
         model_path: str,
         metadata: Optional[Dict[str, Any]] = None,
         version_id: Optional[str] = None,
+        write_model_card: bool = False,
+        model_type: Optional[str] = None,
     ) -> str:
         """
         Register a model. Returns version_id (e.g. v_20260212_143022 or provided).
+        If write_model_card is True, writes a model card JSON next to the model file.
         """
         version_id = version_id or f"v_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        path_abs = os.path.abspath(model_path)
         entry = {
             "version_id": version_id,
-            "path": os.path.abspath(model_path),
+            "path": path_abs,
             "created_at": datetime.now().isoformat(),
             "metadata": metadata or {},
         }
         self._entries.append(entry)
         self._save()
-        logger.info("Registered model %s at %s", version_id, entry["path"])
+        logger.info("Registered model %s at %s", version_id, path_abs)
+
+        if write_model_card:
+            try:
+                from catia.model_cards import get_model_card_path, write_model_card as write_card
+                card_path = get_model_card_path(path_abs)
+                write_card(
+                    str(card_path),
+                    model_type or ML_CONFIG.get("model_type", "RandomForest"),
+                    version_id,
+                    metrics=metadata.get("metrics") if metadata else None,
+                    hyperparameters=ML_CONFIG.get("hyperparameters"),
+                )
+            except Exception as e:
+                logger.warning("Could not write model card: %s", e)
+
         return version_id
 
     def list_versions(self) -> List[Dict[str, Any]]:
