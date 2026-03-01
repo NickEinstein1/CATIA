@@ -43,6 +43,13 @@ from catia.uncertainty import RiskMetricUncertainty, quantify_risk_uncertainty
 from catia.correlation import PerilCorrelationSimulator, simulate_correlated_perils
 
 try:
+    from catia.climate_scenarios import apply_scenario_to_peril_config
+    _CLIMATE_SCENARIOS_AVAILABLE = True
+except ImportError:
+    _CLIMATE_SCENARIOS_AVAILABLE = False
+    apply_scenario_to_peril_config = None  # type: ignore
+
+try:
     from catia.exposure import ExposureStore
     from catia.vulnerability import VulnerabilitySet
     _EXPOSURE_AVAILABLE = True
@@ -503,7 +510,8 @@ class MultiPerilSimulator:
 
     def __init__(self, perils: List[str] = None,
                  use_correlation: bool = True,
-                 copula_type: str = "t"):
+                 copula_type: str = "t",
+                 scenario_id: Optional[str] = None):
         """
         Initialize multi-peril simulator.
 
@@ -511,19 +519,25 @@ class MultiPerilSimulator:
             perils: List of peril types to simulate
             use_correlation: Whether to use copula-based correlation
             copula_type: Type of copula ('gaussian', 't', 'gumbel', 'clayton')
+            scenario_id: Optional climate scenario (e.g. RCP4.5_mid, SSP2_2050, high_stress)
         """
         self.perils = perils or list(PERIL_CONFIG.keys())
         self.use_correlation = use_correlation
         self.copula_type = copula_type
+        self.scenario_id = scenario_id
         self.simulators = {}
         self.correlation_simulator = None
 
-        # Create simulators for each peril
+        # Create simulators for each peril (apply scenario if set)
         for peril in self.perils:
             config = PERIL_CONFIG.get(peril, {})
+            freq = config.get('frequency_base', 0.5)
+            sev = dict(config.get('severity_params', {'mu': 15, 'sigma': 2}))
+            if _CLIMATE_SCENARIOS_AVAILABLE and scenario_id and apply_scenario_to_peril_config:
+                freq, sev = apply_scenario_to_peril_config(peril, freq, sev, scenario_id)
             self.simulators[peril] = FinancialImpactSimulator(
-                event_frequency=config.get('frequency_base', 0.5),
-                severity_params=config.get('severity_params', {'mu': 15, 'sigma': 2})
+                event_frequency=freq,
+                severity_params=sev,
             )
 
         # Create correlation simulator if enabled
@@ -535,6 +549,8 @@ class MultiPerilSimulator:
         logger.info(f"MultiPerilSimulator initialized with {len(self.perils)} perils")
         if use_correlation:
             logger.info(f"  Correlation: {copula_type}-copula enabled")
+        if scenario_id and scenario_id != "baseline":
+            logger.info(f"  Climate scenario: {scenario_id}")
 
     def simulate_all_perils(self, num_iterations: int = None) -> Dict:
         """
@@ -688,6 +704,7 @@ def _simulate_exposure_based_one_year(
     vulnerability_set: "VulnerabilitySet",
     perils: List[str],
     rng: np.random.Generator,
+    scenario_id: Optional[str] = None,
 ) -> Tuple[Dict[str, float], float]:
     """
     Simulate one year of losses using exposure × vulnerability.
@@ -697,19 +714,29 @@ def _simulate_exposure_based_one_year(
     if not records:
         return {p: 0.0 for p in perils}, 0.0
 
+    scenario_adj = {}
+    if scenario_id and scenario_id != "baseline" and _CLIMATE_SCENARIOS_AVAILABLE:
+        try:
+            from catia.climate_scenarios import get_scenario_adjustments
+            scenario_adj = get_scenario_adjustments(scenario_id)
+        except Exception:
+            pass
+
     total_tiv = exposure_store.get_total_tiv()
     peril_losses = {p: 0.0 for p in perils}
 
     for peril in perils:
         freq = PERIL_CONFIG.get(peril, {}).get("frequency_base", 0.5)
-        n_events = rng.poisson(freq)
+        freq_mult = scenario_adj.get(peril, {}).get("frequency_multiplier", 1.0)
+        sev_mult = scenario_adj.get(peril, {}).get("severity_multiplier", 1.0)
+        n_events = rng.poisson(freq * freq_mult)
         if n_events == 0:
             continue
         intensities = _sample_intensity(peril, n_events, rng)
         for intensity in intensities:
             damage_ratio = vulnerability_set.damage_ratio(peril, float(intensity))
             # Event loss = sum over exposure of TIV * damage_ratio (single intensity applied to all)
-            event_loss = total_tiv * damage_ratio
+            event_loss = total_tiv * damage_ratio * sev_mult
             peril_losses[peril] += event_loss
 
     aggregate = sum(peril_losses.values())
@@ -722,6 +749,7 @@ def run_exposure_based_simulation(
     perils: List[str],
     num_iterations: int = None,
     random_seed: int = None,
+    scenario_id: Optional[str] = None,
 ) -> Dict:
     """
     Run Monte Carlo simulation using exposure × vulnerability.
@@ -738,7 +766,7 @@ def run_exposure_based_simulation(
 
     for i in range(num_iterations):
         peril_annual, agg = _simulate_exposure_based_one_year(
-            exposure_store, vulnerability_set, perils, rng
+            exposure_store, vulnerability_set, perils, rng, scenario_id=scenario_id
         )
         for p in perils:
             by_peril_losses[p][i] = peril_annual[p]
@@ -822,6 +850,7 @@ def run_multi_peril_analysis(perils: List[str] = None,
                              copula_type: str = "t",
                              n_bootstrap: int = 300,
                              num_iterations: Optional[int] = None,
+                             scenario_id: Optional[str] = None,
                              exposure_store: Optional["ExposureStore"] = None,
                              vulnerability_set: Optional["VulnerabilitySet"] = None) -> Dict:
     """
@@ -835,6 +864,7 @@ def run_multi_peril_analysis(perils: List[str] = None,
         copula_type: Type of copula ('gaussian', 't', 'gumbel', 'clayton')
         n_bootstrap: Number of bootstrap samples for uncertainty
         num_iterations: Override Monte Carlo iterations (uses config default if None)
+        scenario_id: Optional climate scenario (e.g. RCP4.5_mid, SSP2_2050, high_stress)
         exposure_store: If set with vulnerability_set, use exposure × vulnerability loss
         vulnerability_set: If set with exposure_store, use exposure-based simulation
 
@@ -845,14 +875,19 @@ def run_multi_peril_analysis(perils: List[str] = None,
 
     if exposure_store is not None and vulnerability_set is not None and _EXPOSURE_AVAILABLE:
         results = run_exposure_based_simulation(
-            exposure_store, vulnerability_set, perils, num_iterations=num_iterations
+            exposure_store, vulnerability_set, perils,
+            num_iterations=num_iterations,
+            scenario_id=scenario_id,
         )
-        contributions = MultiPerilSimulator(perils, use_correlation=False).get_peril_contribution(results)
+        contributions = MultiPerilSimulator(
+            perils, use_correlation=False, scenario_id=scenario_id
+        ).get_peril_contribution(results)
     else:
         simulator = MultiPerilSimulator(
             perils,
             use_correlation=include_correlation,
-            copula_type=copula_type
+            copula_type=copula_type,
+            scenario_id=scenario_id,
         )
         results = simulator.simulate_all_perils()
         contributions = simulator.get_peril_contribution(results)
@@ -862,8 +897,10 @@ def run_multi_peril_analysis(perils: List[str] = None,
         'results': results,
         'contributions': contributions.to_dict('records'),
         'aggregate_metrics': results['aggregate']['metrics'],
-        'correlation_used': results.get('correlation_used', False)
+        'correlation_used': results.get('correlation_used', False),
     }
+    if scenario_id and scenario_id != "baseline":
+        output['scenario_id'] = scenario_id
 
     # Add correlation info if used
     if results.get('correlation_used') and 'correlation_info' in results:
