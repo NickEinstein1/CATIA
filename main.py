@@ -292,6 +292,15 @@ def run_catia_analysis(region: str = "US_Gulf_Coast",
         json.dump(results, f, indent=2, default=str)
     logger.info(f"✓ Report saved: {output_file}")
 
+    # Assumption register (documented assumptions for auditability)
+    try:
+        from catia.assumption_register import write_assumption_register
+        reg_path = os.path.join(OUTPUT_CONFIG["output_dir"], "assumption_register.json")
+        write_assumption_register(reg_path)
+        logger.info(f"✓ Assumption register saved: {reg_path}")
+    except Exception as e:
+        logger.debug("Assumption register skipped: %s", e)
+
     # Phase C: Compliance report (full audit trail + CAS/SOA/NAIC)
     try:
         from catia.compliance import generate_compliance_report
