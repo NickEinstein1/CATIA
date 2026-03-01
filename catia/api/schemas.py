@@ -55,6 +55,10 @@ class SimulationRequest(BaseModel):
         default=None,
         description="Optional exposure records for loss = exposure × vulnerability; if provided, simulation uses exposure-based loss",
     )
+    scenario_id: Optional[str] = Field(
+        default=None,
+        description="Optional climate scenario (e.g. baseline, RCP4.5_mid, SSP2_2050, high_stress)",
+    )
 
 
 class MitigationRequest(BaseModel):
