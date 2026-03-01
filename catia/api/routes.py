@@ -181,13 +181,17 @@ async def run_simulation(request: SimulationRequest):
                 include_evt=False,
                 include_uncertainty=False,
                 num_iterations=request.num_iterations,
+                scenario_id=request.scenario_id,
             )
             results = out["results"]
             contributions_df = out["contributions"]
             import pandas as pd
             contributions_df = pd.DataFrame(contributions_df)
         else:
-            simulator = MultiPerilSimulator(perils=perils)
+            simulator = MultiPerilSimulator(
+                perils=perils,
+                scenario_id=request.scenario_id,
+            )
             results = simulator.simulate_all_perils(num_iterations=request.num_iterations)
             contributions_df = simulator.get_peril_contribution(results)
 
