@@ -66,6 +66,9 @@ __all__ = [
     "export",
     "exposure",
     "vulnerability",
+    "assumption_register",
+    "model_cards",
+    "climate_scenarios",
     "logging_config",
     "metrics",
 ]
