@@ -190,6 +190,46 @@ INTENSITY_DISTRIBUTION = {
 }
 
 # ============================================================================
+# CLIMATE SCENARIOS (forward-looking risk)
+# ============================================================================
+# Scenario ID -> per-peril frequency and severity multipliers for stress/decades.
+# Use with get_scenario_adjustments() and run_multi_peril_analysis(..., scenario_id=...).
+CLIMATE_SCENARIOS = {
+    "baseline": {
+        "description": "No change from current assumptions",
+        "peril_adjustments": {},  # identity
+    },
+    "RCP4.5_mid": {
+        "description": "RCP4.5 mid-century; moderate increase in hazard",
+        "peril_adjustments": {
+            "hurricane": {"frequency_multiplier": 1.15, "severity_multiplier": 1.1},
+            "flood": {"frequency_multiplier": 1.2, "severity_multiplier": 1.15},
+            "wildfire": {"frequency_multiplier": 1.25, "severity_multiplier": 1.1},
+            "drought": {"frequency_multiplier": 1.2, "severity_multiplier": 1.1},
+        },
+    },
+    "SSP2_2050": {
+        "description": "SSP2 circa 2050; moderate emissions, moderate hazard shift",
+        "peril_adjustments": {
+            "hurricane": {"frequency_multiplier": 1.2, "severity_multiplier": 1.15},
+            "flood": {"frequency_multiplier": 1.25, "severity_multiplier": 1.2},
+            "wildfire": {"frequency_multiplier": 1.3, "severity_multiplier": 1.15},
+            "drought": {"frequency_multiplier": 1.25, "severity_multiplier": 1.15},
+        },
+    },
+    "high_stress": {
+        "description": "High stress (e.g. Solvency II or severe scenario)",
+        "peril_adjustments": {
+            "hurricane": {"frequency_multiplier": 1.5, "severity_multiplier": 1.3},
+            "flood": {"frequency_multiplier": 1.5, "severity_multiplier": 1.3},
+            "wildfire": {"frequency_multiplier": 1.5, "severity_multiplier": 1.3},
+            "earthquake": {"frequency_multiplier": 1.0, "severity_multiplier": 1.2},
+            "drought": {"frequency_multiplier": 1.4, "severity_multiplier": 1.2},
+        },
+    },
+}
+
+# ============================================================================
 # DATA CONFIGURATION
 # ============================================================================
 
