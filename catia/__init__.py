@@ -69,6 +69,9 @@ __all__ = [
     "assumption_register",
     "model_cards",
     "climate_scenarios",
+    "dashboard",
+    "geo_hazards",
+    "geo_osm",
     "logging_config",
     "metrics",
 ]

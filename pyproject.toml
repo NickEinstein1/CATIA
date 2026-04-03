@@ -33,6 +33,7 @@ dependencies = [
     "scikit-learn>=1.3.0",
     "plotly>=5.14.0",
     "dash>=2.14.0",
+    "dash-leaflet>=1.0.15",
     "requests>=2.31.0",
     "urllib3>=2.0.0",
     "python-dotenv>=1.0.0",
@@ -57,13 +58,14 @@ dev = [
 
 [project.scripts]
 catia = "catia.cli:main"
+catia-dashboard = "catia.dashboard:run_dashboard"
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["catia*", "config*"]
 
 [tool.setuptools.package-data]
-catia = ["*.yaml", "*.json"]
+catia = ["*.yaml", "*.json", "assets/*.css"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

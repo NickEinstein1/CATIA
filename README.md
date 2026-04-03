@@ -47,6 +47,14 @@ uvicorn catia.api.app:app --reload --port 8000
 
 **CLI:** `catia --api --port 8000`
 
+**System dashboard (Dash):** futuristic command-center UI with an **orthographic globe**, an **OpenStreetMap** 2D map (`dash-leaflet`) with the same markers, charts, and assumptions:
+
+```bash
+catia --dashboard
+# or: catia-dashboard
+# http://127.0.0.1:8050 — use --dashboard-port to change port
+```
+
 ---
 
 ## Capabilities
