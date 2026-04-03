@@ -32,6 +32,7 @@ def main():
 Examples:
   catia --region US_Gulf_Coast --perils hurricane flood
   catia --api --port 8000
+  catia --dashboard --dashboard-port 8050
   catia --version
         """
     )
@@ -74,6 +75,23 @@ Examples:
         action="store_true",
         help="Start the FastAPI server instead of running analysis"
     )
+
+    parser.add_argument(
+        "--dashboard",
+        action="store_true",
+        help="Start the Dash system dashboard (browse metrics, charts, assumptions)"
+    )
+
+    parser.add_argument(
+        "--dashboard-port",
+        type=int,
+        default=8050,
+        help="Dashboard port when using --dashboard (default 8050)")
+
+    parser.add_argument(
+        "--dashboard-host",
+        default="127.0.0.1",
+        help="Dashboard bind address (default 127.0.0.1)")
     
     parser.add_argument(
         "--host",
@@ -109,6 +127,24 @@ Examples:
             uvicorn.run(app, host=args.host, port=args.port)
         except ImportError:
             logger.error("uvicorn not installed. Run: pip install uvicorn")
+            sys.exit(1)
+        return
+
+    if args.dashboard:
+        try:
+            from catia.dashboard import run_dashboard
+            logger.info(
+                "Starting CATIA dashboard on %s:%s",
+                args.dashboard_host,
+                args.dashboard_port,
+            )
+            run_dashboard(
+                host=args.dashboard_host,
+                port=args.dashboard_port,
+                debug=args.verbose,
+            )
+        except ImportError as e:
+            logger.error("Dash not available: %s. pip install dash", e)
             sys.exit(1)
         return
     

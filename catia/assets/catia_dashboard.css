@@ -1,0 +1,170 @@
+/* CATIA futuristic dashboard — dark command-center aesthetic */
+
+:root {
+  --catia-bg-deep: #070b14;
+  --catia-bg-panel: rgba(15, 23, 42, 0.72);
+  --catia-border: rgba(56, 189, 248, 0.25);
+  --catia-glow: rgba(34, 211, 238, 0.45);
+  --catia-text: #e2e8f0;
+  --catia-muted: #94a3b8;
+  --catia-accent: #22d3ee;
+  --catia-accent-2: #a855f7;
+}
+
+body {
+  background: var(--catia-bg-deep) !important;
+  background-image:
+    radial-gradient(ellipse 120% 80% at 50% -20%, rgba(34, 211, 238, 0.12), transparent 50%),
+    radial-gradient(ellipse 80% 50% at 100% 50%, rgba(168, 85, 247, 0.08), transparent 45%),
+    linear-gradient(180deg, #070b14 0%, #0a0f1a 40%, #070b14 100%) !important;
+  color: var(--catia-text) !important;
+  min-height: 100vh;
+}
+
+.catia-future-root {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 28px 24px 48px;
+  font-family: "Segoe UI", system-ui, "IBM Plex Sans", sans-serif;
+}
+
+.catia-hero {
+  text-align: center;
+  margin-bottom: 8px;
+  padding: 28px 20px 20px;
+  border-radius: 16px;
+  border: 1px solid var(--catia-border);
+  background: var(--catia-bg-panel);
+  box-shadow:
+    0 0 40px rgba(34, 211, 238, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(12px);
+}
+
+.catia-hero h1 {
+  margin: 0 0 8px;
+  font-size: 1.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: linear-gradient(90deg, var(--catia-accent), #fff 40%, var(--catia-accent-2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.catia-hero .sub {
+  color: var(--catia-muted);
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+.catia-hero .badge {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  color: var(--catia-accent);
+  border: 1px solid var(--catia-border);
+  background: rgba(34, 211, 238, 0.08);
+}
+
+/* Dash tabs override */
+.catia-tabs .tab-content {
+  background: transparent !important;
+}
+
+.catia-tabs .tab {
+  background: rgba(30, 41, 59, 0.5) !important;
+  color: var(--catia-muted) !important;
+  border: 1px solid transparent !important;
+  border-radius: 8px 8px 0 0 !important;
+  padding: 10px 16px !important;
+  margin-right: 4px !important;
+  font-weight: 500 !important;
+}
+
+.catia-tabs .tab--selected {
+  background: rgba(15, 23, 42, 0.95) !important;
+  color: var(--catia-accent) !important;
+  border-color: var(--catia-border) !important;
+  box-shadow: 0 -2px 16px rgba(34, 211, 238, 0.12);
+}
+
+.catia-panel {
+  border: 1px solid var(--catia-border);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+  background: var(--catia-bg-panel);
+  backdrop-filter: blur(8px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.catia-panel h3 {
+  margin-top: 0;
+  color: var(--catia-text);
+  font-size: 1.05rem;
+}
+
+.catia-panel table {
+  color: var(--catia-muted);
+}
+
+.catia-panel th,
+.catia-panel td {
+  border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+  padding: 8px 10px;
+}
+
+.catia-panel code {
+  background: rgba(34, 211, 238, 0.12);
+  color: var(--catia-accent);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.88em;
+}
+
+.catia-panel pre {
+  background: rgba(7, 11, 20, 0.85);
+  border: 1px solid #334155;
+  border-radius: 8px;
+  color: #cbd5e1;
+}
+
+.catia-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  margin-top: 16px;
+  justify-content: center;
+}
+
+.catia-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: var(--catia-muted);
+}
+
+.catia-legend-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  box-shadow: 0 0 10px currentColor;
+}
+
+.globe-caption {
+  text-align: center;
+  color: var(--catia-muted);
+  font-size: 0.88rem;
+  margin-top: -8px;
+  margin-bottom: 20px;
+}
+
+._dash-undo-redo {
+  display: none;
+}
