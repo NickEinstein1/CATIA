@@ -11,16 +11,18 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import plotly.graph_objects as go
-from dash import Dash, Input, Output, dcc, html
+from dash import Dash, Input, Output, callback_context, dcc, html
 
 from catia import __version__
 from catia.config import CLIMATE_SCENARIOS, OUTPUT_CONFIG, PERIL_CONFIG
 from catia.geo_hazards import PERIL_VIS_COLORS, fig_global_hazard_globe
-from catia.geo_osm import build_osm_leaflet_map
+from catia.geo_osm import build_osm_leaflet_map, build_osm_live_catastrophe_map
+from catia.live_catastrophe_feeds import category_color, fetch_all_live_events
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +80,86 @@ def _style_dark_chart(fig: go.Figure) -> None:
         font=dict(color="#cbd5e1"),
         title_font=dict(color="#e2e8f0"),
     )
+
+
+def fig_live_catastrophe_globe(events: List[Dict[str, Any]]) -> go.Figure:
+    """Orthographic globe with live USGS / EONET points."""
+    if not events:
+        fig = go.Figure()
+        fig.update_layout(
+            title="Live events (no data — check network or API status)",
+            height=520,
+            annotations=[
+                dict(
+                    text="Open feeds failed or returned no points.",
+                    xref="paper",
+                    yref="paper",
+                    x=0.5,
+                    y=0.5,
+                    showarrow=False,
+                    font=dict(size=14, color="#94a3b8"),
+                )
+            ],
+        )
+        _style_dark_chart(fig)
+        return fig
+    fig = go.Figure(
+        data=[
+            go.Scattergeo(
+                lon=[float(e["lon"]) for e in events],
+                lat=[float(e["lat"]) for e in events],
+                mode="markers",
+                marker=dict(
+                    size=11,
+                    color=[category_color(str(e.get("category") or "")) for e in events],
+                    line=dict(width=1, color="#0f172a"),
+                ),
+                text=[
+                    f"{str(e.get('title', ''))[:70]}<br>"
+                    f"{e.get('category_label', '')} · {e.get('source', '')} {e.get('severity_label', '')}"
+                    for e in events
+                ],
+                hoverinfo="text",
+            )
+        ],
+        layout=dict(
+            title="Near–real-time events (USGS earthquakes + NASA EONET)",
+            height=560,
+            geo=dict(
+                projection=dict(type="orthographic", rotation=dict(lon=0, lat=15, roll=0)),
+                showland=True,
+                landcolor="#334155",
+                oceancolor="#0f172a",
+                showocean=True,
+                bgcolor="rgba(15,23,42,0.6)",
+            ),
+        ),
+    )
+    _style_dark_chart(fig)
+    return fig
+
+
+def _live_feed_legend() -> html.Div:
+    samples = [
+        ("earthquake", "Earthquake (USGS)"),
+        ("wildfires", "Wildfires (EONET)"),
+        ("severe_storms", "Severe storms (EONET)"),
+        ("volcanoes", "Volcanoes (EONET)"),
+        ("floods", "Floods (EONET)"),
+    ]
+    items = []
+    for slug, label in samples:
+        c = category_color(slug)
+        items.append(
+            html.Div(
+                className="catia-legend-item",
+                children=[
+                    html.Span(className="catia-legend-dot", style={"backgroundColor": c, "color": c}),
+                    html.Span(label),
+                ],
+            )
+        )
+    return html.Div(className="catia-legend", children=items)
 
 
 def fig_return_periods(report: Dict[str, Any]) -> Optional[go.Figure]:
@@ -218,6 +300,7 @@ def create_dash_app(
                 },
                 children=[
                     dcc.Tab(label="Global view", value="tab-globe"),
+                    dcc.Tab(label="Live Earth", value="tab-live"),
                     dcc.Tab(label="Overview", value="tab-overview"),
                     dcc.Tab(label="Latest run", value="tab-run"),
                     dcc.Tab(label="Charts", value="tab-charts"),
@@ -229,6 +312,11 @@ def create_dash_app(
             ),
             html.Div(id="tab-content", style={"marginTop": "16px"}),
             dcc.Interval(id="refresh-interval", interval=30_000, n_intervals=0),
+            dcc.Interval(
+                id="live-feed-interval",
+                interval=int(os.environ.get("CATIA_LIVE_REFRESH_MS", "180000")),
+                n_intervals=0,
+            ),
         ],
     )
 
@@ -236,8 +324,14 @@ def create_dash_app(
         Output("tab-content", "children"),
         Input("dash-tabs", "value"),
         Input("refresh-interval", "n_intervals"),
+        Input("live-feed-interval", "n_intervals"),
     )
-    def render_tab(active: str, _n: int):
+    def render_tab(active: str, _n: int, _live_n: int):
+        triggered = ""
+        if callback_context.triggered:
+            triggered = callback_context.triggered[0]["prop_id"].split(".")[0]
+        force_live = active == "tab-live" and triggered == "dash-tabs"
+
         report = load_report(str(out))
         reg = load_assumption_register(str(out))
         files = _list_output_files(out)
@@ -308,6 +402,153 @@ def create_dash_app(
                     osm_section,
                 ]
             )
+
+        if active == "tab-live":
+            feed = fetch_all_live_events(force=force_live)
+            events = feed.events
+            err_banner: Optional[html.Div] = None
+            if feed.errors:
+                err_banner = html.Div(
+                    className="catia-panel",
+                    style={
+                        "padding": "10px",
+                        "borderLeft": "3px solid #f97316",
+                        "marginBottom": "12px",
+                    },
+                    children=[
+                        html.P(
+                            "Some feeds failed (partial data). " + " · ".join(feed.errors),
+                            style={"color": "#fdba74", "margin": 0},
+                        ),
+                    ],
+                )
+            globe_live = fig_live_catastrophe_globe(events)
+            live_map = build_osm_live_catastrophe_map(events)
+            map_section: Any
+            if live_map is not None:
+                map_section = html.Div(
+                    className="catia-panel",
+                    style={"padding": "12px"},
+                    children=[
+                        html.H3(
+                            "OpenStreetMap — same events (pan/zoom)",
+                            style={"marginTop": 0, "marginBottom": "8px"},
+                        ),
+                        html.P(
+                            "Data © OpenStreetMap contributors. Event data © USGS / NASA.",
+                            style={"color": "#94a3b8", "fontSize": "0.88rem", "marginBottom": "12px"},
+                        ),
+                        live_map,
+                    ],
+                )
+            else:
+                map_section = html.Div(
+                    className="catia-panel",
+                    children=[
+                        html.P(
+                            [
+                                "Install ",
+                                html.Code("dash-leaflet"),
+                                " for the 2D map (",
+                                html.Code("pip install dash-leaflet"),
+                                ").",
+                            ],
+                            style={"color": "#94a3b8"},
+                        ),
+                    ],
+                )
+            # Small summary counts by coarse category
+            counts: Dict[str, int] = {}
+            for e in events:
+                k = str(e.get("category_label") or e.get("category") or "?")
+                counts[k] = counts.get(k, 0) + 1
+            top_counts = sorted(counts.items(), key=lambda x: -x[1])[:12]
+            summary = html.Div(
+                className="catia-panel",
+                style={"padding": "12px"},
+                children=[
+                    html.H3("Snapshot", style={"marginTop": 0}),
+                    html.P(
+                        f"Last updated: {feed.fetched_at_iso} · {len(events)} point(s) on map.",
+                        style={"color": "#94a3b8"},
+                    ),
+                    html.Ul([html.Li(f"{k}: {v}") for k, v in top_counts] or [html.Li("—")]),
+                    html.P(
+                        [
+                            "Sources: ",
+                            html.A(
+                                "USGS earthquake feeds",
+                                href="https://earthquake.usgs.gov/earthquakes/feed/",
+                                target="_blank",
+                                rel="noopener noreferrer",
+                                style={"color": "#22d3ee"},
+                            ),
+                            " · ",
+                            html.A(
+                                "NASA EONET",
+                                href="https://eonet.gsfc.nasa.gov/",
+                                target="_blank",
+                                rel="noopener noreferrer",
+                                style={"color": "#22d3ee"},
+                            ),
+                            ". Polling interval can be set with ",
+                            html.Code("CATIA_LIVE_REFRESH_MS"),
+                            " (ms).",
+                        ],
+                        style={"fontSize": "0.88rem", "color": "#94a3b8", "marginTop": "8px"},
+                    ),
+                ],
+            )
+            table_rows = [
+                html.Tr([html.Th("Where / what"), html.Th("Type"), html.Th("Source"), html.Th("When / detail")])
+            ]
+            for e in events[:40]:
+                table_rows.append(
+                    html.Tr([
+                        html.Td(str(e.get("title", ""))[:80]),
+                        html.Td(str(e.get("category_label", ""))[:40]),
+                        html.Td(str(e.get("source", ""))),
+                        html.Td(
+                            " ".join(
+                                x
+                                for x in (e.get("time_iso"), e.get("severity_label"))
+                                if x
+                            )
+                            or "—"
+                        ),
+                    ])
+                )
+            live_blocks: List[Any] = [summary]
+            if err_banner is not None:
+                live_blocks.insert(0, err_banner)
+            live_blocks.extend(
+                [
+                    html.Div(
+                        className="catia-panel",
+                        style={"padding": "12px 12px 4px"},
+                        children=[
+                            html.H3("Orthographic globe", style={"marginTop": 0, "marginBottom": "8px"}),
+                            dcc.Graph(figure=globe_live, style={"minHeight": "580px"}),
+                        ],
+                    ),
+                    html.P(
+                        "Markers combine USGS (typically M≥2.5, last 24h) and NASA EONET open events. "
+                        "This is observational activity, not CATIA modeled loss.",
+                        className="globe-caption",
+                    ),
+                    _live_feed_legend(),
+                    map_section,
+                    html.Div(
+                        className="catia-panel",
+                        style={"padding": "12px", "overflowX": "auto"},
+                        children=[
+                            html.H3("Recent rows (up to 40)", style={"marginTop": 0}),
+                            html.Table(table_rows),
+                        ],
+                    ),
+                ]
+            )
+            return html.Div(live_blocks)
 
         if active == "tab-overview":
             return html.Div(
