@@ -17,6 +17,7 @@ Notes:
 
 from __future__ import annotations
 
+from html import escape
 from typing import Any, Dict, List, Optional
 
 from catia.config import PERIL_CONFIG
@@ -25,6 +26,7 @@ from catia.geo_hazards import (
     REGION_CENTROIDS,
     aggregate_region_incidents,
 )
+from catia.live_catastrophe_feeds import category_color
 
 # OSM standard raster tile URL pattern (browser requests tiles).
 OSM_TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -105,6 +107,71 @@ def build_osm_leaflet_map(
     return dl.Map(
         center=[center_lat, center_lon],
         zoom=map_zoom,
+        style={"height": height, "width": "100%", "borderRadius": "12px"},
+        children=layers,
+    )
+
+
+def build_osm_live_catastrophe_map(
+    events: List[Dict[str, Any]],
+    *,
+    height: str = "520px",
+    zoom: int = 2,
+) -> Any:
+    """
+    Leaflet map with OSM tiles and markers for live feed events (USGS, EONET, etc.).
+    """
+    try:
+        import dash_leaflet as dl
+    except ImportError:
+        return None
+
+    layers: List[Any] = [
+        dl.TileLayer(url=OSM_TILE_URL, attribution=OSM_ATTRIBUTION_HTML),
+    ]
+
+    for ev in events:
+        lat = ev.get("lat")
+        lon = ev.get("lon")
+        if lat is None or lon is None:
+            continue
+        try:
+            lat_f, lon_f = float(lat), float(lon)
+        except (TypeError, ValueError):
+            continue
+        cat = str(ev.get("category") or "other")
+        color = category_color(cat)
+        sev = ev.get("severity_label") or ""
+        src = ev.get("source") or ""
+        title = str(ev.get("title") or "Event")[:180]
+        label = ev.get("category_label") or cat
+        tiso = ev.get("time_iso") or ""
+        parts = [escape(title), escape(f"{label}" + (f" · {sev}" if sev else ""))]
+        if tiso:
+            parts.append(escape(tiso))
+        if src:
+            parts.append(escape(f"Source: {src}"))
+        url = ev.get("url")
+        if url:
+            parts.append(escape(str(url)))
+        popup_text = "\n".join(parts)
+        layers.append(
+            dl.CircleMarker(
+                center=[lat_f, lon_f],
+                radius=9,
+                pathOptions=dict(
+                    color=color,
+                    fillColor=color,
+                    fillOpacity=0.85,
+                    weight=2,
+                ),
+                children=dl.Popup(popup_text),
+            )
+        )
+
+    return dl.Map(
+        center=[20.0, 0.0],
+        zoom=zoom,
         style={"height": height, "width": "100%", "borderRadius": "12px"},
         children=layers,
     )
