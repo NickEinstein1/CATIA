@@ -11,27 +11,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import plotly.graph_objects as go
 
 from catia.config import PERIL_CONFIG
-
-# Approximate centroids (lat, lon) for named regions used in PERIL_CONFIG
-REGION_CENTROIDS: Dict[str, Tuple[float, float]] = {
-    "US_Gulf_Coast": (28.5, -90.0),
-    "US_East_Coast": (38.0, -75.0),
-    "US_West_Coast": (37.5, -121.0),
-    "US_Midwest": (41.5, -93.0),
-    "US_Southwest": (34.0, -112.0),
-    "Caribbean": (18.0, -66.0),
-    "Southeast_Asia": (5.0, 110.0),
-    "South_Asia": (22.0, 79.0),
-    "Europe": (48.0, 10.0),
-    "Mediterranean": (38.0, 18.0),
-    "Australia": (-25.0, 134.0),
-    "South_America": (-15.0, -60.0),
-    "Africa": (0.0, 20.0),
-    "Japan": (36.0, 138.0),
-    "Turkey": (39.0, 35.0),
-    "Chile": (-30.0, -71.0),
-    "Indonesia": (-2.0, 118.0),
-}
+from catia.geo_regions import REGION_CENTROIDS
 
 PERIL_VIS_COLORS: Dict[str, str] = {
     "hurricane": "#22d3ee",

@@ -17,15 +17,13 @@ Notes:
 
 from __future__ import annotations
 
+import os
 from html import escape
 from typing import Any, Dict, List, Optional
 
 from catia.config import PERIL_CONFIG
-from catia.geo_hazards import (
-    PERIL_VIS_COLORS,
-    REGION_CENTROIDS,
-    aggregate_region_incidents,
-)
+from catia.geo_hazards import PERIL_VIS_COLORS, aggregate_region_incidents
+from catia.geo_regions import REGION_CENTROIDS
 from catia.live_catastrophe_feeds import category_color
 
 # OSM standard raster tile URL pattern (browser requests tiles).
@@ -117,19 +115,29 @@ def build_osm_live_catastrophe_map(
     *,
     height: str = "520px",
     zoom: int = 2,
+    cluster_markers: Optional[bool] = None,
 ) -> Any:
     """
     Leaflet map with OSM tiles and markers for live feed events (USGS, EONET, etc.).
+
+    When ``cluster_markers`` is True (default from env ``CATIA_LIVE_MAP_CLUSTER``),
+    markers are wrapped in ``MarkerClusterGroup`` for dense views. Falls back to a
+    flat layer if clustering is unavailable.
     """
     try:
         import dash_leaflet as dl
     except ImportError:
         return None
 
-    layers: List[Any] = [
-        dl.TileLayer(url=OSM_TILE_URL, attribution=OSM_ATTRIBUTION_HTML),
-    ]
+    if cluster_markers is None:
+        cluster_markers = os.environ.get("CATIA_LIVE_MAP_CLUSTER", "1").strip().lower() not in (
+            "0",
+            "false",
+            "no",
+            "off",
+        )
 
+    markers: List[Any] = []
     for ev in events:
         lat = ev.get("lat")
         lon = ev.get("lon")
@@ -139,8 +147,19 @@ def build_osm_live_catastrophe_map(
             lat_f, lon_f = float(lat), float(lon)
         except (TypeError, ValueError):
             continue
+        sc_raw = ev.get("catia_score")
+        try:
+            sc = float(sc_raw) if sc_raw is not None else 45.0
+        except (TypeError, ValueError):
+            sc = 45.0
+        sc = max(0.0, min(100.0, sc))
+        r = int(max(5, min(22, 5 + 17 * (sc / 100.0) ** 0.55)))
         cat = str(ev.get("category") or "other")
-        color = category_color(cat)
+        peril = ev.get("catia_peril")
+        if isinstance(peril, str) and peril in PERIL_VIS_COLORS:
+            color = PERIL_VIS_COLORS[peril]
+        else:
+            color = category_color(cat)
         sev = ev.get("severity_label") or ""
         src = ev.get("source") or ""
         title = str(ev.get("title") or "Event")[:180]
@@ -149,16 +168,17 @@ def build_osm_live_catastrophe_map(
         parts = [escape(title), escape(f"{label}" + (f" · {sev}" if sev else ""))]
         if tiso:
             parts.append(escape(tiso))
+        parts.append(escape(f"CATIA score: {sc:.0f}"))
         if src:
             parts.append(escape(f"Source: {src}"))
         url = ev.get("url")
         if url:
             parts.append(escape(str(url)))
         popup_text = "\n".join(parts)
-        layers.append(
+        markers.append(
             dl.CircleMarker(
                 center=[lat_f, lon_f],
-                radius=9,
+                radius=r,
                 pathOptions=dict(
                     color=color,
                     fillColor=color,
@@ -168,6 +188,17 @@ def build_osm_live_catastrophe_map(
                 children=dl.Popup(popup_text),
             )
         )
+
+    tile = dl.TileLayer(url=OSM_TILE_URL, attribution=OSM_ATTRIBUTION_HTML)
+    layers: List[Any]
+    if markers and cluster_markers:
+        try:
+            clustered = dl.MarkerClusterGroup(id="catia-live-marker-cluster", children=markers)
+            layers = [tile, clustered]
+        except Exception:
+            layers = [tile] + markers
+    else:
+        layers = [tile] + markers
 
     return dl.Map(
         center=[20.0, 0.0],

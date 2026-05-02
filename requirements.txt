@@ -17,6 +17,7 @@ shap>=0.43.0
 plotly>=5.14.0
 dash>=2.14.0
 dash-leaflet>=1.0.15
+deckgl-dash>=0.8.0
 
 # API & Web
 requests>=2.31.0
