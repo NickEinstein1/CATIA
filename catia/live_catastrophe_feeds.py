@@ -59,6 +59,28 @@ def _iso_from_ms(ms: Optional[float]) -> str:
         return ""
 
 
+def _latest_eonet_geometry_time_iso(geom: List[Dict[str, Any]]) -> str:
+    best: Optional[datetime] = None
+    for g in geom or []:
+        d = g.get("date")
+        if not d:
+            continue
+        try:
+            txt = str(d).strip()
+            if txt.endswith("Z"):
+                txt = txt[:-1] + "+00:00"
+            dt = datetime.fromisoformat(txt)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            else:
+                dt = dt.astimezone(timezone.utc)
+            if best is None or dt > best:
+                best = dt
+        except Exception:
+            continue
+    return best.strftime("%Y-%m-%d %H:%M UTC") if best else ""
+
+
 def _collect_lon_lat_pairs(coords: Any, acc: List[Tuple[float, float]]) -> None:
     """Flatten GeoJSON-like nested coordinate lists to (lon, lat) pairs."""
     if isinstance(coords, (int, float)):
@@ -139,6 +161,7 @@ def fetch_eonet_events(session: requests.Session, timeout: int = 15) -> List[Dic
         eid = str(ev.get("id") or ev.get("title") or "eonet")
         link = ev.get("link") or "https://eonet.gsfc.nasa.gov/"
         title = str(ev.get("title") or cat_title)
+        t_iso = _latest_eonet_geometry_time_iso(geom)
         out.append(
             {
                 "id": f"eonet:{eid}",
@@ -147,7 +170,7 @@ def fetch_eonet_events(session: requests.Session, timeout: int = 15) -> List[Dic
                 "title": title[:200],
                 "category": slug,
                 "category_label": cat_title,
-                "time_iso": "",
+                "time_iso": t_iso,
                 "severity_label": "",
                 "source": "NASA EONET",
                 "url": link,
