@@ -9,7 +9,9 @@ Basemap styles are third-party (e.g. CARTO); follow each provider's terms.
 
 from __future__ import annotations
 
+import json
 import os
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from catia.geo_hazards import PERIL_VIS_COLORS
@@ -64,7 +66,7 @@ def build_live_deck_earth_map(
     """
     try:
         from deckgl_dash import DeckGL
-        from deckgl_dash.layers import ScatterplotLayer
+        from deckgl_dash.layers import GeoJsonLayer, ScatterplotLayer
         from deckgl_dash.maplibre import MapLibreConfig
     except ImportError:
         return None
@@ -102,7 +104,7 @@ def build_live_deck_earth_map(
             }
         )
 
-    layer = ScatterplotLayer(
+    scatter_layer = ScatterplotLayer(
         id="catia-live-scatter",
         data=rows,
         get_position="@@=coordinates",
@@ -115,6 +117,33 @@ def build_live_deck_earth_map(
         line_width_min_pixels=1.0,
         opacity=0.92,
     )
+
+    layers: List[Any] = []
+    overlay_on = os.environ.get("CATIA_EXPOSURE_OVERLAY", "1").strip().lower() not in (
+        "0",
+        "false",
+        "no",
+        "off",
+    )
+    exp_path = Path(__file__).resolve().parent / "data" / "indicative_exposure_regions.geojson"
+    if overlay_on and exp_path.is_file():
+        try:
+            with open(exp_path, encoding="utf-8") as ef:
+                exp_geo: Dict[str, Any] = json.load(ef)
+            layers.append(
+                GeoJsonLayer(
+                    id="catia-exposure-indicative",
+                    data=exp_geo,
+                    pickable=False,
+                    stroked=False,
+                    filled=True,
+                    get_fill_color=[251, 191, 36, 32],
+                    opacity=0.85,
+                )
+            )
+        except Exception:
+            pass
+    layers.append(scatter_layer)
 
     # Camera — centroid of rendered points (same as Scatterplot data)
     lons = [r["coordinates"][0] for r in rows]
@@ -134,7 +163,7 @@ def build_live_deck_earth_map(
     try:
         return DeckGL(
             id=map_component_id,
-            layers=[layer],
+            layers=layers,
             initial_view_state=ivs,
             maplibre_config=ml,
             style={"width": "100%", "height": height, "minHeight": height},

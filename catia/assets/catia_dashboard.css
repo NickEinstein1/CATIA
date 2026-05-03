@@ -329,6 +329,26 @@ a.catia-link:hover {
   font-size: 0.9rem;
 }
 
+.catia-flash--info {
+  border: 1px solid rgba(34, 211, 238, 0.4);
+  background: rgba(34, 211, 238, 0.08);
+}
+
+.catia-flash__title {
+  margin: 0 0 6px;
+  font-size: 0.9rem;
+  color: #e2e8f0;
+  font-weight: 600;
+}
+
+.catia-flash__list {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--catia-muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
 /* Tables */
 .catia-table {
   width: 100%;
@@ -408,6 +428,17 @@ a.catia-link:hover {
 
 .catia-split-grid__col {
   min-width: 0;
+}
+
+.catia-split-grid--compare {
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 1200px) {
+  .catia-split-grid--compare {
+    grid-template-columns: 1fr 1fr 1fr;
+    align-items: start;
+  }
 }
 
 .catia-panel--tight {
@@ -495,6 +526,147 @@ a.catia-link:hover {
 
 .catia-dash-slider .rc-slider-handle {
   border-color: var(--catia-accent) !important;
+}
+
+.catia-live-toolbar__row2 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(51, 65, 85, 0.55);
+}
+
+.catia-live-toolbar__radios {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  margin-top: 6px;
+}
+
+.catia-live-toolbar__radio-label {
+  color: var(--catia-muted);
+  font-size: 0.88rem;
+}
+
+.catia-live-toolbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.catia-btn {
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 0.86rem;
+  cursor: pointer;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  background: rgba(7, 11, 20, 0.75);
+  color: var(--catia-text);
+}
+
+.catia-btn--ghost:hover {
+  border-color: var(--catia-accent);
+  color: var(--catia-accent);
+}
+
+.catia-upload-zone {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px dashed rgba(100, 116, 139, 0.65);
+  color: var(--catia-muted);
+  font-size: 0.86rem;
+  cursor: pointer;
+}
+
+.catia-upload-zone:hover {
+  border-color: rgba(34, 211, 238, 0.45);
+  color: var(--catia-accent);
+}
+
+.catia-clipboard button {
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 0.86rem;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  background: rgba(7, 11, 20, 0.75);
+  color: var(--catia-accent);
+  cursor: pointer;
+}
+
+.catia-live-health {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  font-size: 0.78rem;
+  color: var(--catia-muted);
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(51, 65, 85, 0.55);
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.catia-live-health__lead {
+  color: #94a3b8;
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+.catia-live-health__cache {
+  margin-left: auto;
+  color: #64748b;
+}
+
+.catia-health-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid rgba(51, 65, 85, 0.7);
+}
+
+.catia-health-pill--ok {
+  border-color: rgba(52, 211, 153, 0.45);
+  color: #6ee7b7;
+}
+
+.catia-health-pill--bad {
+  border-color: rgba(248, 113, 113, 0.45);
+  color: #fca5a5;
+}
+
+.catia-compliance {
+  margin-top: 20px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(51, 65, 85, 0.55);
+  background: rgba(7, 11, 20, 0.35);
+}
+
+.catia-compliance__lead {
+  margin: 0 0 8px;
+  font-size: 0.82rem;
+  color: var(--catia-muted);
+}
+
+.catia-compliance__links {
+  margin: 0 0 8px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.catia-compliance__disclaimer {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #64748b;
+  line-height: 1.45;
 }
 
 /* Screen-reader-only announcements */
