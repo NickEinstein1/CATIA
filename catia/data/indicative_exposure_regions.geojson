@@ -1,0 +1,54 @@
+{
+  "type": "FeatureCollection",
+  "description": "Indicative world regions for situational overlay only — not modeled CATIA exposure.",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "name": "North America", "tier_hint": "high" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[-168.0, 15.0], [-50.0, 15.0], [-50.0, 72.0], [-168.0, 72.0], [-168.0, 15.0]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Latin America & Caribbean", "tier_hint": "medium" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[-118.0, -56.0], [-32.0, -56.0], [-32.0, 32.0], [-118.0, 32.0], [-118.0, -56.0]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Europe & Mediterranean", "tier_hint": "high" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[-12.0, 34.0], [42.0, 34.0], [42.0, 72.0], [-12.0, 72.0], [-12.0, 34.0]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Africa", "tier_hint": "medium" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[-18.0, -35.0], [52.0, -35.0], [52.0, 38.0], [-18.0, 38.0], [-18.0, -35.0]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Asia–Pacific", "tier_hint": "high" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[55.0, -12.0], [155.0, -12.0], [155.0, 55.0], [55.0, 55.0], [55.0, -12.0]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Oceania", "tier_hint": "medium" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[110.0, -48.0], [180.0, -48.0], [180.0, -10.0], [110.0, -10.0], [110.0, -48.0]]]
+      }
+    }
+  ]
+}

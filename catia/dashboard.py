@@ -8,19 +8,23 @@ Uses Dash + Plotly orthographic globe. Reads outputs/catia_report.json for loss-
 
 Live Earth env (optional): ``CATIA_LIVE_REFRESH_MS``, ``CATIA_LIVE_GLOBE_MAX_POINTS`` (globe cap),
 ``CATIA_LIVE_MAP_CLUSTER`` (0 = disable Leaflet marker clustering),
-``CATIA_DECK_MAP_STYLE`` (e.g. ``CARTO_DARK_MATTER``, ``OPENFREEMAP_LIBERTY`` — see ``deckgl-dash`` MapLibre styles).
+``CATIA_DECK_MAP_STYLE`` (e.g. ``CARTO_DARK_MATTER``, ``OPENFREEMAP_LIBERTY`` — see ``deckgl-dash`` MapLibre styles),
+``CATIA_PUBLIC_DASH_URL`` (optional base for “copy share link”), ``CATIA_EXPOSURE_OVERLAY`` (Deck.gl indicative regions).
 """
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import os
+import urllib.parse
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import plotly.graph_objects as go
-from dash import Dash, Input, Output, callback_context, dcc, html
+from dash import Dash, Input, Output, State, callback_context, dcc, html
+from dash.exceptions import PreventUpdate
 
 from catia import __version__
 from catia.config import CLIMATE_SCENARIOS, OUTPUT_CONFIG, PERIL_CONFIG
@@ -28,7 +32,9 @@ from catia.geo_hazards import PERIL_VIS_COLORS, fig_global_hazard_globe
 from catia.geo_deck import build_live_deck_earth_map
 from catia.geo_osm import build_osm_leaflet_map, build_osm_live_catastrophe_map
 from catia.geo_regions import REGION_CENTROIDS
-from catia.live_catastrophe_feeds import category_color, fetch_all_live_events
+from catia.live_alert_rules import evaluate_live_rules, load_rules
+from catia.live_catastrophe_feeds import LiveFeedResult, category_color, fetch_all_live_events
+from catia.live_compliance import attribution_footer
 from catia.live_intel import enrich_and_rank_events
 
 logger = logging.getLogger(__name__)
@@ -116,7 +122,7 @@ def _live_marker_size(event: Dict[str, Any]) -> float:
 
 
 def fig_live_catastrophe_globe(events: List[Dict[str, Any]]) -> go.Figure:
-    """Orthographic globe with live USGS / EONET points."""
+    """Orthographic globe with live USGS / EONET / GDACS points."""
     if not events:
         fig = go.Figure()
         fig.update_layout(
@@ -158,7 +164,7 @@ def fig_live_catastrophe_globe(events: List[Dict[str, Any]]) -> go.Figure:
             )
         ],
         layout=dict(
-            title="Near–real-time events (USGS earthquakes + NASA EONET)",
+            title="Near–real-time events (USGS · NASA EONET · GDACS when enabled)",
             height=560,
             margin=dict(l=8, r=8, t=56, b=8),
             geo=dict(
@@ -181,6 +187,13 @@ def _score_badge(score: float) -> html.Span:
     return html.Span(f"{s:.0f}", className=cls)
 
 
+_LIVE_FEED_LABELS = (
+    ("usgs", "USGS"),
+    ("eonet", "EONET"),
+    ("gdacs", "GDACS"),
+)
+
+
 def _live_kpi_strip(
     feed_fetched_at: str,
     n_events: int,
@@ -191,9 +204,6 @@ def _live_kpi_strip(
     raw_from_feeds: Optional[int] = None,
     filter_hint: Optional[str] = None,
 ) -> html.Div:
-    usgs_ok = sources_ok.get("usgs", False)
-    eonet_ok = sources_ok.get("eonet", False)
-
     def _feed_dot(ok: bool) -> str:
         return "catia-feed-dot catia-feed-dot--ok" if ok else "catia-feed-dot catia-feed-dot--bad"
 
@@ -249,16 +259,15 @@ def _live_kpi_strip(
                                 children=[
                                     html.Span(
                                         children=[
-                                            html.Span(className=_feed_dot(usgs_ok)),
-                                            " USGS",
+                                            html.Span(
+                                                className=_feed_dot(
+                                                    bool(sources_ok.get(key, False))
+                                                )
+                                            ),
+                                            f" {label}",
                                         ]
-                                    ),
-                                    html.Span(
-                                        children=[
-                                            html.Span(className=_feed_dot(eonet_ok)),
-                                            " EONET",
-                                        ]
-                                    ),
+                                    )
+                                    for key, label in _LIVE_FEED_LABELS
                                 ],
                             ),
                         ],
@@ -266,6 +275,46 @@ def _live_kpi_strip(
                 ],
             ),
             *tail,
+        ],
+    )
+
+
+def _live_feed_health_strip(feed: LiveFeedResult) -> html.Div:
+    pills: List[Any] = []
+    for key, label in _LIVE_FEED_LABELS:
+        ms = feed.latency_ms.get(key)
+        code = feed.http_status.get(key)
+        ok = bool(feed.sources_ok.get(key, False))
+        lat_s = f"{float(ms):.0f} ms" if isinstance(ms, (int, float)) else "—"
+        st_s = str(code) if code is not None else "—"
+        cls = "catia-health-pill catia-health-pill--ok" if ok else "catia-health-pill catia-health-pill--bad"
+        pills.append(html.Span(className=cls, children=f"{label}: {lat_s} · HTTP {st_s}"))
+    cache = "hit" if feed.cache_hit else "miss"
+    cb = feed.cache_backend or "memory"
+    off = " · offline" if feed.offline_mode else ""
+    return html.Div(
+        className="catia-live-health",
+        children=[
+            html.Span("Feed health · ", className="catia-live-health__lead"),
+            *pills,
+            html.Span(
+                className="catia-live-health__cache",
+                children=f" · Cache: {cache} ({cb}){off}",
+            ),
+        ],
+    )
+
+
+def _live_alert_hits_banner(events: List[Dict[str, Any]]) -> Optional[html.Div]:
+    hits = evaluate_live_rules(events, load_rules())
+    if not hits:
+        return None
+    lines = [f"{h.label}: {h.event_title} (score {h.score:.0f})" for h in hits[:8]]
+    return html.Div(
+        className="catia-flash catia-flash--info",
+        children=[
+            html.P("Live alert rules matched:", className="catia-flash__title"),
+            html.Ul([html.Li(t) for t in lines], className="catia-flash__list"),
         ],
     )
 
@@ -306,6 +355,7 @@ def _live_feed_legend() -> html.Div:
         ("severe_storms", "Severe storms (EONET)"),
         ("volcanoes", "Volcanoes (EONET)"),
         ("floods", "Floods (EONET)"),
+        ("hurricane", "GDACS / tropical cyclone–class events"),
     ]
     items = []
     for slug, label in samples:
@@ -438,6 +488,7 @@ def create_dash_app(
     app.layout = html.Div(
         className="catia-future-root",
         children=[
+            dcc.Location(id="url", refresh=False),
             html.Div(
                 className="catia-hero",
                 children=[
@@ -548,8 +599,64 @@ def create_dash_app(
                             ),
                         ],
                     ),
+                    html.Div(
+                        className="catia-live-toolbar__row2",
+                        children=[
+                            html.Div(
+                                className="catia-live-toolbar__field catia-live-toolbar__field--wide",
+                                children=[
+                                    html.Label(
+                                        "Compare to modeled view",
+                                        className="catia-live-toolbar__label",
+                                    ),
+                                    dcc.RadioItems(
+                                        id="live-compare-mode",
+                                        options=[
+                                            {
+                                                "label": "Live feeds only",
+                                                "value": "live_only",
+                                            },
+                                            {
+                                                "label": "Split: modeled globe + live",
+                                                "value": "split",
+                                            },
+                                        ],
+                                        value="live_only",
+                                        persistence=True,
+                                        persistence_type="session",
+                                        className="catia-live-toolbar__radios",
+                                        inputClassName="catia-live-toolbar__radio",
+                                        labelClassName="catia-live-toolbar__radio-label",
+                                    ),
+                                ],
+                            ),
+                            html.Div(
+                                className="catia-live-toolbar__actions",
+                                children=[
+                                    html.Button(
+                                        "Export preset",
+                                        id="live-preset-export-btn",
+                                        type="button",
+                                        className="catia-btn catia-btn--ghost",
+                                    ),
+                                    dcc.Upload(
+                                        id="live-preset-upload",
+                                        children=html.Span("Import preset"),
+                                        className="catia-upload-zone",
+                                        multiple=False,
+                                    ),
+                                    dcc.Clipboard(
+                                        id="live-share-clipboard",
+                                        title="Copy shareable link",
+                                        className="catia-clipboard",
+                                    ),
+                                ],
+                            ),
+                        ],
+                    ),
                 ],
             ),
+            dcc.Download(id="live-preset-download"),
             dcc.Loading(
                 id="tab-loading",
                 type="circle",
@@ -583,6 +690,7 @@ def create_dash_app(
         Input("live-filter-peril", "value"),
         Input("live-filter-min-score", "value"),
         Input("live-filter-region", "value"),
+        Input("live-compare-mode", "value"),
     )
     def render_tab(
         active: str,
@@ -591,6 +699,7 @@ def create_dash_app(
         peril_sel: Optional[str],
         min_score: Optional[Any],
         region_sel: Optional[str],
+        compare_mode: Optional[str],
     ):
         triggered = ""
         if callback_context.triggered:
@@ -699,6 +808,7 @@ def create_dash_app(
                 f"Peril filter: {pf} · min score ≥ {min_sc:.0f} · focal for proximity scoring: "
                 f"{(focal_eff or '—').replace('_', ' ')}"
             )
+            compare_raw = (compare_mode or "live_only").strip()
 
             sr_status = html.Div(
                 f"Live Earth updated: {len(events)} events match filters.",
@@ -792,6 +902,14 @@ def create_dash_app(
                             html.A(
                                 "NASA EONET",
                                 href="https://eonet.gsfc.nasa.gov/",
+                                target="_blank",
+                                rel="noopener noreferrer",
+                                className="catia-link",
+                            ),
+                            " · ",
+                            html.A(
+                                "GDACS",
+                                href="https://www.gdacs.org/",
                                 target="_blank",
                                 rel="noopener noreferrer",
                                 className="catia-link",
@@ -890,44 +1008,105 @@ def create_dash_app(
                     )
                 )
 
-            maps_row = html.Div(
-                className="catia-split-grid",
+            globe_live_panel = html.Div(
+                className="catia-panel catia-panel--tight",
+                style={"padding": "12px 12px 4px"},
                 children=[
                     html.Div(
-                        className="catia-split-grid__col",
+                        className="catia-section-head",
                         children=[
-                            html.Div(
-                                className="catia-panel catia-panel--tight",
-                                style={"padding": "12px 12px 4px"},
-                                children=[
-                                    html.Div(
-                                        className="catia-section-head",
-                                        children=[
-                                            html.H3("Globe", className="catia-section-head__title"),
-                                            html.P(
-                                                "Orthographic · marker size ∝ CATIA score"
-                                                + (
-                                                    f" · showing top {_GLOBE_MAX_POINTS} by score "
-                                                    f"({len(events)} match filters)"
-                                                    if len(events) > _GLOBE_MAX_POINTS
-                                                    else ""
-                                                ),
-                                                className="catia-section-head__sub",
-                                            ),
-                                        ],
-                                    ),
-                                    dcc.Graph(
-                                        figure=globe_live,
-                                        style={"minHeight": "520px"},
-                                        config=_PLOTLY_UI_CONFIG,
-                                    ),
-                                ],
+                            html.H3(
+                                "Live globe",
+                                className="catia-section-head__title",
+                            ),
+                            html.P(
+                                "Orthographic · marker size ∝ CATIA score"
+                                + (
+                                    f" · showing top {_GLOBE_MAX_POINTS} by score "
+                                    f"({len(events)} match filters)"
+                                    if len(events) > _GLOBE_MAX_POINTS
+                                    else ""
+                                ),
+                                className="catia-section-head__sub",
                             ),
                         ],
                     ),
-                    html.Div(className="catia-split-grid__col", children=[map_section]),
+                    dcc.Graph(
+                        figure=globe_live,
+                        style={"minHeight": "520px"},
+                        config=_PLOTLY_UI_CONFIG,
+                    ),
                 ],
             )
+
+            if compare_raw == "split":
+                if report:
+                    globe_modeled = fig_global_hazard_globe(report, focal_region=focal_eff)
+                else:
+                    globe_modeled = go.Figure()
+                    globe_modeled.update_layout(
+                        title="Modeled globe (no catia_report.json)",
+                        height=520,
+                        annotations=[
+                            dict(
+                                text="Run an analysis to compare live feeds with loss-weighted peril markers.",
+                                xref="paper",
+                                yref="paper",
+                                x=0.5,
+                                y=0.5,
+                                showarrow=False,
+                                font=dict(size=14, color="#94a3b8"),
+                            )
+                        ],
+                    )
+                    _style_dark_chart(globe_modeled)
+                maps_row = html.Div(
+                    className="catia-split-grid catia-split-grid--compare",
+                    children=[
+                        html.Div(
+                            className="catia-split-grid__col",
+                            children=[
+                                html.Div(
+                                    className="catia-panel catia-panel--tight",
+                                    style={"padding": "12px 12px 4px"},
+                                    children=[
+                                        html.Div(
+                                            className="catia-section-head",
+                                            children=[
+                                                html.H3(
+                                                    "Modeled CATIA globe",
+                                                    className="catia-section-head__title",
+                                                ),
+                                                html.P(
+                                                    "Latest run: loss-weighted markers (not live feeds).",
+                                                    className="catia-section-head__sub",
+                                                ),
+                                            ],
+                                        ),
+                                        dcc.Graph(
+                                            figure=globe_modeled,
+                                            style={"minHeight": "520px"},
+                                            config=_PLOTLY_UI_CONFIG,
+                                        ),
+                                    ],
+                                ),
+                            ],
+                        ),
+                        html.Div(className="catia-split-grid__col", children=[globe_live_panel]),
+                        html.Div(className="catia-split-grid__col", children=[map_section]),
+                    ],
+                )
+            else:
+                maps_row = html.Div(
+                    className="catia-split-grid",
+                    children=[
+                        html.Div(
+                            className="catia-split-grid__col",
+                            children=[globe_live_panel],
+                        ),
+                        html.Div(className="catia-split-grid__col", children=[map_section]),
+                    ],
+                )
 
             deck_gl = build_live_deck_earth_map(events)
             deck_section: Any
@@ -952,7 +1131,9 @@ def create_dash_app(
                         deck_gl,
                         html.P(
                             [
-                                "Style: set ",
+                                "Indicative exposure regions (Deck layer under points) respect ",
+                                html.Code("CATIA_EXPOSURE_OVERLAY"),
+                                ". Style: ",
                                 html.Code("CATIA_DECK_MAP_STYLE"),
                                 " (e.g. ",
                                 html.Code("CARTO_DARK_MATTER"),
@@ -986,9 +1167,15 @@ def create_dash_app(
                     ],
                 )
 
-            live_blocks: List[Any] = [sr_status, kpi, type_breakdown]
+            live_blocks: List[Any] = [sr_status]
             if err_banner is not None:
-                live_blocks.insert(0, err_banner)
+                live_blocks.append(err_banner)
+            live_blocks.append(kpi)
+            live_blocks.append(_live_feed_health_strip(feed))
+            _hits_banner = _live_alert_hits_banner(events)
+            if _hits_banner is not None:
+                live_blocks.append(_hits_banner)
+            live_blocks.append(type_breakdown)
             live_blocks.extend(
                 [
                     html.Div(
@@ -1024,8 +1211,8 @@ def create_dash_app(
                     maps_row,
                     deck_section,
                     html.P(
-                        "Globe / Leaflet / Deck layers combine USGS (typically M≥2.5, last 24h) and NASA EONET. "
-                        "Observational activity only — not CATIA modeled loss.",
+                        "Globe / Leaflet / Deck layers combine USGS (typically M≥2.5, last 24h), NASA EONET, "
+                        "and GDACS when enabled. Observational activity only — not CATIA modeled loss.",
                         className="globe-caption",
                     ),
                     _live_feed_legend(),
@@ -1059,6 +1246,7 @@ def create_dash_app(
                             ),
                         ],
                     ),
+                    attribution_footer(compact=True),
                 ]
             )
             return html.Div(live_blocks)
@@ -1210,6 +1398,163 @@ def create_dash_app(
                 ]),
             ],
         )
+
+    @app.callback(
+        Output("live-filter-peril", "value"),
+        Output("live-filter-min-score", "value"),
+        Output("live-filter-region", "value"),
+        Input("url", "search"),
+        Input("dash-tabs", "value"),
+        State("live-filter-peril", "value"),
+        State("live-filter-min-score", "value"),
+        State("live-filter-region", "value"),
+        prevent_initial_call=False,
+    )
+    def hydrate_live_from_url(
+        search: Optional[str],
+        tab: str,
+        cur_p: Optional[str],
+        cur_m: Optional[Any],
+        cur_r: Optional[str],
+    ):
+        if tab != "tab-live":
+            raise PreventUpdate
+        q = urllib.parse.parse_qs((search or "").lstrip("?"))
+        if not any(k in q for k in ("lp", "lm", "lr")):
+            raise PreventUpdate
+        out_p = cur_p
+        out_m = cur_m
+        out_r = cur_r
+        if q.get("lp") and q["lp"][0]:
+            out_p = q["lp"][0]
+        if q.get("lm") and q["lm"][0] != "":
+            try:
+                raw_m = float(q["lm"][0])
+                out_m = round(max(0.0, min(90.0, raw_m)) / 5.0) * 5.0
+            except ValueError:
+                pass
+        if "lr" in q:
+            out_r = q["lr"][0] if q["lr"] else ""
+        return out_p, out_m, out_r
+
+    @app.callback(
+        Output("live-filter-peril", "value", allow_duplicate=True),
+        Output("live-filter-min-score", "value", allow_duplicate=True),
+        Output("live-filter-region", "value", allow_duplicate=True),
+        Input("live-preset-upload", "contents"),
+        State("live-preset-upload", "filename"),
+        prevent_initial_call=True,
+    )
+    def import_live_preset(contents: Optional[str], _filename: Optional[str]):
+        if not contents:
+            raise PreventUpdate
+        try:
+            meta = str(contents).split(",", 1)[1]
+            raw = base64.b64decode(meta)
+            data = json.loads(raw.decode("utf-8"))
+            peril = str(data.get("peril") or "all")
+            min_sc = float(data.get("min_score", 0))
+            region = str(data.get("region") or "")
+            min_sc = round(max(0.0, min(90.0, min_sc)) / 5.0) * 5.0
+            return peril, min_sc, region
+        except Exception:
+            raise PreventUpdate
+
+    @app.callback(
+        Output("url", "search", allow_duplicate=True),
+        Input("live-filter-peril", "value"),
+        Input("live-filter-min-score", "value"),
+        Input("live-filter-region", "value"),
+        State("dash-tabs", "value"),
+        State("url", "search"),
+        prevent_initial_call=True,
+    )
+    def push_live_filters_to_url(
+        peril: Optional[str],
+        min_sc: Optional[Any],
+        region: Optional[str],
+        tab: str,
+        cur_search: Optional[str],
+    ):
+        if tab != "tab-live":
+            raise PreventUpdate
+        params: Dict[str, str] = {}
+        if peril and peril != "all":
+            params["lp"] = peril
+        try:
+            msv = float(min_sc) if min_sc is not None else 0.0
+        except (TypeError, ValueError):
+            msv = 0.0
+        if msv > 0:
+            params["lm"] = str(int(msv)) if float(msv).is_integer() else str(msv)
+        if region:
+            params["lr"] = region
+        new_search = f"?{urllib.parse.urlencode(params)}" if params else ""
+        cur = cur_search or ""
+        if new_search == cur:
+            raise PreventUpdate
+        return new_search
+
+    @app.callback(
+        Output("live-preset-download", "data"),
+        Input("live-preset-export-btn", "n_clicks"),
+        State("live-filter-peril", "value"),
+        State("live-filter-min-score", "value"),
+        State("live-filter-region", "value"),
+        prevent_initial_call=True,
+    )
+    def export_live_preset(
+        n_clicks: Optional[int],
+        peril: Optional[str],
+        min_sc: Optional[Any],
+        region: Optional[str],
+    ):
+        if not n_clicks:
+            raise PreventUpdate
+        try:
+            ms = float(min_sc) if min_sc is not None else 0.0
+        except (TypeError, ValueError):
+            ms = 0.0
+        payload = {
+            "version": 1,
+            "peril": peril or "all",
+            "min_score": ms,
+            "region": region or "",
+        }
+        body = json.dumps(payload, indent=2)
+        return {"content": body, "filename": "catia_live_preset.json"}
+
+    @app.callback(
+        Output("live-share-clipboard", "content"),
+        Input("live-filter-peril", "value"),
+        Input("live-filter-min-score", "value"),
+        Input("live-filter-region", "value"),
+        State("url", "pathname"),
+    )
+    def update_live_share_clipboard(
+        peril: Optional[str],
+        min_sc: Optional[Any],
+        region: Optional[str],
+        pathname: Optional[str],
+    ):
+        params: Dict[str, str] = {}
+        if peril and peril != "all":
+            params["lp"] = peril
+        try:
+            msv = float(min_sc) if min_sc is not None else 0.0
+        except (TypeError, ValueError):
+            msv = 0.0
+        if msv > 0:
+            params["lm"] = str(int(msv)) if float(msv).is_integer() else str(msv)
+        if region:
+            params["lr"] = region
+        qs = urllib.parse.urlencode(params)
+        path = pathname or "/"
+        suffix = f"{path}?{qs}" if qs else path
+        base = os.environ.get("CATIA_PUBLIC_DASH_URL", "").rstrip("/")
+        if base:
+            return f"{base}{suffix}"
+        return suffix
 
     return app
 

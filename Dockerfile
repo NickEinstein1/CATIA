@@ -20,12 +20,15 @@ RUN apt-get update && apt-get install -y \
 # Copy requirements
 COPY requirements.txt .
 
-# Install Python dependencies
+# Install Python dependencies and package (dashboard / CLI entry points)
 RUN pip install --upgrade pip && \
     pip install -r requirements.txt
 
 # Copy application code
 COPY . .
+
+RUN pip install --no-cache-dir . && \
+    pip install --no-cache-dir "redis>=5.0.0"
 
 # Create output directory
 RUN mkdir -p outputs logs
@@ -37,9 +40,7 @@ EXPOSE 8050
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import sys; sys.exit(0)" || exit 1
 
-# Default command
+# Default: run batch pipeline. Override for dashboard, e.g.:
+#   docker run -p 8050:8050 <image> python -m catia.dashboard
 CMD ["python", "main.py"]
-
-# Alternative: Run as web service
-# CMD ["python", "-m", "src.visualization"]
 
