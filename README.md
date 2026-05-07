@@ -88,6 +88,13 @@ catia --dashboard
 
 ## Documentation
 
+- **`notebooks/docs/`** — Markdown guides ([regions](notebooks/docs/regions.md), [perils](notebooks/docs/perils.md)). Build with [MkDocs](https://www.mkdocs.org/) (`mkdocs.yml` at repo root):
+
+  ```bash
+  pip install -e ".[docs]"
+  mkdocs serve
+  ```
+
 - **[Tutorial](notebooks/tutorial.ipynb)** — Step-by-step notebook
 
 ---
