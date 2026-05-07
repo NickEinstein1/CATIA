@@ -15,9 +15,28 @@
 
 ## Installation
 
+**Requirements:** Python **3.10+** ([`pyproject.toml`](pyproject.toml)). From the repo root:
+
 ```bash
 cd CATIA
-python3 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+python3 -m venv .venv                    # Windows: py -3 -m venv .venv
+source .venv/bin/activate                # Windows CMD: .venv\Scripts\activate.bat
+                                         # Windows PS:  .\.venv\Scripts\Activate.ps1
+pip install -e ".[dev]" -r requirements.txt
+```
+
+Use **`python`** instead of **`python3`** on Windows after activation if that is what your install exposes. If PowerShell blocks `Activate.ps1`, use Command Prompt and `activate.bat`, or run `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser` once.
+
+**uv** — Install [uv](https://docs.astral.sh/uv/getting-started/installation/), run `uv venv`, activate the venv the same way as above, then:
+
+```bash
+uv pip install -e ".[dev]" -r requirements.txt
+```
+
+**conda / mamba** — Create and activate an env (any supported Python, e.g. `python=3.12`), then run the same `pip install` line inside it. Example with conda (substitute `mamba` if you use it):
+
+```bash
+conda create -n catia python=3.12 -y && conda activate catia
 pip install -e ".[dev]" -r requirements.txt
 ```
 
