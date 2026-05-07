@@ -1,0 +1,29 @@
+site_name: CATIA
+site_description: Developer documentation for CATIA catastrophe risk modeling
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+nav:
+  - Home: index.md
+  - Regions: regions.md
+  - Perils: perils.md
+
+markdown_extensions:
+  - tables
+  - fenced_code
+  - toc:
+      permalink: true
+
+docs_dir: notebooks/docs
