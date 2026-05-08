@@ -10,21 +10,132 @@ import asyncio
 import json
 import logging
 import shlex
-import sys
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import click
 from rich.console import Console, Group
 from rich.live import Live
 from rich.panel import Panel
+from rich.prompt import Prompt
 from rich.spinner import Spinner
 from rich.syntax import Syntax
+from rich.table import Table
 from rich.text import Text
 
 from catia.agent_bridge import ActuarialResult, ActuarialScience, RiskAnalysis, RiskAnalysisResult
 from catia.config import DEFAULT_PERILS, PERIL_CONFIG, SIMULATION_CONFIG
 from catia.pipeline import run_catia_analysis
 from catia.run_spec import KNOWN_ARTIFACTS, load_run_spec, merge_cli_run_spec
+
+# One-line hints (plain text); shown in /tips and rotated occasionally before the prompt.
+AGENT_TIPS: Tuple[str, ...] = (
+    "Default runs use mock/synthetic data — fine for demos; pair --real with NOAA_API_TOKEN for climate pulls.",
+    "After /run or /risk, type /json to inspect results; catia_report.json includes metadata.transparency.",
+    "Shell: catia-agent run --explain (or CATIA_EXPLAIN=1) prints what the pipeline will do before it runs.",
+    "Faster iteration: catia-agent run -p hurricane only, or use examples/runs/minimal_report.yaml with artifacts: [report].",
+    "Regions are coarse labels (e.g. US_Gulf_Coast), not city polygons — extend the stack for asset-level work.",
+    "/simulate skips mitigation and reports; use /run for the full pipeline to outputs/.",
+    "Natural language: include peril names (hurricane, flood) and words like simulate, train model, or gulf coast.",
+    "Stuck? python -m catia.agent_repl avoids PATH issues on Windows if catia-agent is not found.",
+    "Dashboard & API: catia-agent dashboard and catia-agent api mirror catia --dashboard and catia --api.",
+    "SHAP feature importance needs CATIA_USE_SHAP=1 and runs in the full /run path when SHAP is installed.",
+    "/spec accepts YAML or JSON — keep a RunSpec in version control for repeatable analyses.",
+    "Higher Monte Carlo iterations (--iterations or spec) mean smoother tails but slower runs; start low, then scale up.",
+    "Artifacts list in RunSpec (report, dashboard, shap) controls what files land under output_dir — skip what you do not need.",
+    "PYTHONWARNINGS=default surfaces deprecation noise; use logging level DEBUG only when tracing pipeline steps.",
+    "pytest tests/ and examples/… configs are the fastest check after changing peril or region logic.",
+)
+
+
+def _quick_tips_rich() -> Text:
+    """Three high-value tips on the welcome screen."""
+    return Text.from_markup(
+        "[bold yellow]Quick tips[/bold yellow]\n"
+        "[yellow]•[/yellow] [dim]Use[/dim] [green]/json[/green] [dim]after a run to explore output;[/dim] "
+        "[green]/tips[/green] [dim]lists all hints.[/dim]\n"
+        "[yellow]•[/yellow] [dim]Mock data is default — intentional for transparency; see[/dim] "
+        "[cyan]notebooks/docs/transparency.md[/cyan][dim].[/dim]\n"
+        "[yellow]•[/yellow] [dim]Shell one-shot:[/dim] [magenta]catia-agent run -r US_Gulf_Coast -p hurricane --explain[/magenta]"
+    )
+
+
+def _print_all_tips(console: Console) -> None:
+    table = Table(title="CATIA agent — tips", show_header=True, header_style="bold cyan", border_style="cyan")
+    table.add_column("#", style="dim", width=4, justify="right")
+    table.add_column("Tip", style="white")
+    for i, tip in enumerate(AGENT_TIPS, start=1):
+        table.add_row(str(i), tip)
+    console.print(Panel(table, subtitle="[dim]Rotate automatically every few prompts — or ask for[/dim] [green]tips[/green] [dim]in plain English.[/dim]"))
+
+
+def _maybe_print_rotating_tip(console: Console, session: "AgentSession") -> None:
+    """Print a gentle hint every few prompts so the session stays discoverable."""
+    if session.prompt_count <= 1:
+        return
+    if (session.prompt_count - 1) % 5 != 0:
+        return
+    idx = ((session.prompt_count - 1) // 5 - 1) % len(AGENT_TIPS)
+    console.print(
+        Text.from_markup(
+            f"[bold yellow]Tip[/bold yellow] [dim]—[/dim] {AGENT_TIPS[idx]}"
+        )
+    )
+
+EXAMPLE_PROMPTS_INTRO = (
+    "[bold yellow]Example prompts[/bold yellow] [dim](copy or type your own)[/dim]"
+)
+
+
+def _example_prompts_block() -> Text:
+    return Text.from_markup(
+        f"{EXAMPLE_PROMPTS_INTRO}\n"
+        "[green]/run[/green] [dim]-r US_Gulf_Coast -p hurricane -p flood[/dim]\n"
+        "[green]/run[/green] [dim]--scenario high_stress --iterations 3000[/dim]\n"
+        "[magenta]simulate hurricane flood for the gulf coast[/magenta]  "
+        "[dim]— natural language → actuarial MC[/dim]\n"
+        "[magenta]train the risk model for flood[/magenta]  "
+        "[dim]— data + ML only[/dim]\n"
+        "[green]/risk[/green] [dim]--region US_East_Coast --perils hurricane[/dim]\n"
+        "[green]/spec[/green] [dim]examples/runs/baseline.yaml[/dim]\n"
+        "[green]/json[/green] [dim]— pretty-print last result[/dim]\n"
+        "[green]/tips[/green]  [dim]— all hints (or type[/dim] [magenta]tips[/magenta] [dim]in plain English)[/dim]\n"
+        "[green]/help[/green]  [dim]— full command list[/dim]\n"
+        "[green]/exit[/green]"
+    )
+
+
+def _print_repl_welcome(console: Console) -> None:
+    header = Text.from_markup(
+        "[bold cyan]CATIA agent[/bold cyan] — interactive multi-peril modeling.\n"
+        "[dim]Slash commands[/dim] [bright_white]/run[/bright_white], "
+        "[bright_white]/risk[/bright_white], [bright_white]/simulate[/bright_white] … "
+        "[dim]or plain English.[/dim]"
+    )
+    body = Group(header, Text(""), _example_prompts_block(), Text(""), _quick_tips_rich())
+    console.print(
+        Panel(
+            body,
+            title="[bold white on blue] Welcome [/]",
+            subtitle="[dim]Colors:[/dim] Windows Terminal / VS Code terminal. "
+            "[yellow]RICH_FORCE_COLOR=1[/yellow] [dim]if needed.[/dim]",
+            border_style="cyan",
+        )
+    )
+
+
+async def _prompt_line(console: Console) -> str:
+    """Read one line with a Rich-colored prompt (works on ANSI-capable terminals)."""
+
+    def _read() -> str:
+        return str(
+            Prompt.ask(
+                REPL_PROMPT_MARKUP,
+                console=console,
+                show_default=False,
+            )
+        ).strip()
+
+    return await asyncio.to_thread(_read)
 
 
 def _require_perils(tokens: List[str]) -> List[str]:
@@ -67,6 +178,12 @@ def interpret_natural_language(text: str) -> Tuple[str, List[str]]:
     """
     t = text.strip()
     low = t.lower()
+    toks = low.split()
+
+    if "tips" in toks or (len(toks) == 1 and toks[0] in ("tip", "hint", "hints")):
+        return "tips", []
+    if "tip" in toks and any(w in toks for w in ("show", "list", "more", "give")):
+        return "tips", []
 
     region = _parse_region(t) or "US_Gulf_Coast"
     perils = _require_perils(low.split())
@@ -166,6 +283,7 @@ class AgentSession:
     def __init__(self) -> None:
         self.last_result: Any = None
         self.last_label: str = "last"
+        self.prompt_count: int = 0
 
 
 async def dispatch_command(
@@ -193,24 +311,30 @@ async def dispatch_command(
             console.print(Panel(Text("Goodbye.", style="dim"), border_style="magenta"))
             return False
 
+        if verb == "/tips":
+            _print_all_tips(console)
+            return True
+
         if verb == "/help":
-            lines = [
-                "Structured commands (prefix /):",
-                "  /run [--region R] [--perils P ...] [--mock|--real] [--scenario S] [--iterations N] [--output-dir D]",
-                "  /risk [--region R] [--perils P ...] [--mock|--real]  — data + train (RiskAnalysis → data_acquisition + risk_prediction)",
-                "  /simulate [--perils P ...] [--scenario S] [--iterations N] [--no-uncertainty]  — actuarial MC (ActuarialScience → financial_impact)",
-                "  /spec PATH — run full pipeline from YAML/JSON RunSpec file",
-                "  /json — print last result as highlighted JSON",
-                "  /exit — leave the session",
-                "",
-                "From the shell (outside this REPL):",
-                "  catia-agent run [-c FILE] [-r REGION] [-p PERIL]... [same flags as ``catia``]",
-                "  catia-agent api [--host 0.0.0.0] [--port 8000]",
-                "  catia-agent dashboard [--host 127.0.0.1] [--port 8050] [-v]",
-                "",
-                "Natural language: mention perils, 'simulate', 'train model', 'full pipeline', or regions (e.g. gulf coast).",
-            ]
-            _summary_panel(console, "CATIA agent — help", lines)
+            help_text = Text.from_markup(
+                "[bold cyan]Structured[/bold cyan] [dim](prefix [green]/[/green]):[/dim]\n"
+                "  [green]/run[/green]  [dim][--region R] [--perils P …] [--real] [--scenario S] "
+                "[--iterations N] [--output-dir D][/dim]\n"
+                "  [green]/risk[/green]   [dim]— fetch data + train [RiskAnalysis][/dim]\n"
+                "  [green]/simulate[/green]  [dim]— Monte Carlo multi-peril [ActuarialScience][/dim]\n"
+                "  [green]/spec[/green] [yellow]PATH[/yellow]  [dim]— YAML/JSON [RunSpec][/dim]\n"
+                "  [green]/json[/green]  [green]/tips[/green]  [green]/help[/green]  [green]/exit[/green]\n\n"
+                "[bold cyan]Shell[/bold cyan] [dim](outside this REPL):[/dim]\n"
+                "  [magenta]catia-agent run …[/magenta]   [magenta]catia-agent api …[/magenta]   "
+                "[magenta]catia-agent dashboard …[/magenta]\n\n"
+                "[bold cyan]Natural language[/bold cyan] [dim](no [green]/[/green]):[/dim] name "
+                "[yellow]perils[/yellow], [yellow]gulf coast[/yellow], "
+                "[yellow]simulate[/yellow], [yellow]train model[/yellow], [yellow]full pipeline[/yellow], "
+                "[yellow]tips[/yellow]."
+            )
+            console.print(
+                Panel(help_text, title="[bold]CATIA agent — help[/bold]", border_style="cyan")
+            )
             return True
 
         if verb == "/json":
@@ -454,28 +578,17 @@ async def dispatch_command(
 
 
 async def async_repl() -> None:
-    console = Console()
+    console = Console(highlight=True)
     session = AgentSession()
-    console.print(
-        Panel(
-            Text.from_markup(
-                "[bold cyan]CATIA agent[/bold cyan] — "
-                "type [bold]/help[/bold] or describe what you want (e.g. "
-                "[italic]simulate hurricane flood gulf coast[/italic])."
-            ),
-            border_style="cyan",
-            title="Welcome",
-        )
-    )
+    _print_repl_welcome(console)
     loop = True
     while loop:
+        session.prompt_count += 1
+        _maybe_print_rotating_tip(console, session)
         try:
-            line = await asyncio.to_thread(
-                input,
-                click.style("catia› ", fg="green", bold=True),
-            )
+            line = await _prompt_line(console)
         except (EOFError, KeyboardInterrupt):
-            console.print("\n[dim]Interrupted — use /exit to quit.[/dim]")
+            console.print("\n[dim red]Interrupted[/dim red] — use [green]/exit[/green] to quit.")
             continue
         loop = await dispatch_command(console, session, line)
 
