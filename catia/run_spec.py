@@ -159,4 +159,5 @@ def merge_cli_run_spec(
         use_mock = False
     updates["use_mock_data"] = use_mock
 
-    return spec.model_copy(update=updates)
+    merged = {**spec.model_dump(), **updates}
+    return RunSpec.model_validate(merged)

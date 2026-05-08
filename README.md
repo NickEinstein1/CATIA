@@ -113,6 +113,15 @@ Try `/help`, `/run --perils hurricane flood`, or plain English such as *simulate
 
 ---
 
+## CLI and API security notes
+
+- **API bind address:** `catia --api` and `catia-agent api` default to **127.0.0.1**. Use `--host 0.0.0.0` only when you mean to listen on all interfaces; pair with firewalls and proper deployment controls in production.
+- **CORS:** Defaults allow common **localhost** dev origins. Set **`CATIA_CORS_ORIGINS`** (comma-separated list) for real browser origins, or **`CATIA_CORS_ALLOW_ANY=1`** for `*` with credentials disabled (development only).
+- **Pickle:** Saved models and some caches use **pickle**. Treat files from others as untrusted; loading them can execute arbitrary code.
+- **Long Monte Carlo runs:** If **`--iterations`** is above **`CATIA_MC_WARN`** (default `50000`), the `catia` and `catia-agent run` CLIs log a warning before starting.
+
+---
+
 ## Common issues
 
 ### `catia-agent` or `catia` is not recognized (Windows PowerShell)

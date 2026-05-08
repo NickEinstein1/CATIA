@@ -88,6 +88,12 @@ Open the tutorial notebook from `notebooks/tutorial.ipynb` and **restart the ker
 
 ---
 
+## API defaults (recent CLI behavior)
+
+`catia --api` and `catia-agent api` default to binding **127.0.0.1**. Use **`--host 0.0.0.0`** when you intentionally serve on all interfaces. Browser CORS is restricted to common localhost dev origins unless you set **`CATIA_CORS_ORIGINS`** (comma-separated) or **`CATIA_CORS_ALLOW_ANY=1`** for permissive dev mode. Details: README *CLI and API security notes*.
+
+---
+
 ## Where to look for breaking changes
 
 This repo does not guarantee a separate changelog file. For substantive upgrades:

@@ -6,9 +6,10 @@ Run with: uvicorn catia.api.app:app --reload
 """
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Any
+from typing import Any, List, Tuple
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -32,12 +33,48 @@ from catia.api.schemas import ErrorResponse
 logging.basicConfig(level=LOGGING_CONFIG["level"], format=LOGGING_CONFIG["format"])
 logger = logging.getLogger(__name__)
 
+_DEFAULT_CORS_ORIGINS = [
+    "http://127.0.0.1:8000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8050",
+    "http://localhost:8050",
+]
+
+
+def _cors_allow_origins_and_credentials() -> Tuple[List[str], bool]:
+    """
+    CORS policy for the API.
+
+    - Set ``CATIA_CORS_ORIGINS`` to a comma-separated list of allowed browser origins.
+    - Or set ``CATIA_CORS_ALLOW_ANY=1`` for ``*`` with ``allow_credentials=False``.
+    """
+    raw = os.environ.get("CATIA_CORS_ORIGINS", "").strip()
+    if raw:
+        origins = [o.strip() for o in raw.split(",") if o.strip()]
+        if not origins:
+            return list(_DEFAULT_CORS_ORIGINS), True
+        return origins, True
+    if os.environ.get("CATIA_CORS_ALLOW_ANY", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    ):
+        return ["*"], False
+    return list(_DEFAULT_CORS_ORIGINS), True
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events."""
     logger.info("CATIA API starting up...")
-    logger.info(f"Version: {__version__}")
+    logger.info("Version: %s", __version__)
+    o, _ = _cors_allow_origins_and_credentials()
+    if o == ["*"]:
+        logger.info("CORS: allow any origin (CATIA_CORS_ALLOW_ANY), credentials disabled")
+    else:
+        logger.info(
+            "CORS: %d allowed origin(s) (set CATIA_CORS_ORIGINS to override)", len(o)
+        )
     yield
     logger.info("CATIA API shutting down...")
 
@@ -74,11 +111,11 @@ app.add_middleware(RequestIDMiddleware)
 # Rate limit expensive endpoints (order: last added = first executed after request)
 app.add_middleware(RateLimitMiddleware)
 
-# CORS
+_cors_origins, _cors_credentials = _cors_allow_origins_and_credentials()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
-    allow_credentials=True,
+    allow_origins=_cors_origins,
+    allow_credentials=_cors_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -166,9 +203,9 @@ if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
         "catia.api.app:app",
-        host="0.0.0.0",
+        host="127.0.0.1",
         port=8000,
         reload=True,
-        log_level="info"
+        log_level="info",
     )
 

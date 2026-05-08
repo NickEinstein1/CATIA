@@ -1,7 +1,7 @@
 """Tests for CATIA terminal agent (NL routing + bridge)."""
 
 from catia.agent_bridge import ActuarialScience, RiskAnalysis
-from catia.agent_repl import interpret_natural_language
+from catia.agent_repl import _repl_take_perils, interpret_natural_language
 from catia.config import SIMULATION_CONFIG
 from catia.run_spec import merge_cli_run_spec
 
@@ -31,6 +31,18 @@ def test_interpret_natural_language_tips():
         verb, argv = interpret_natural_language(phrase)
         assert verb == "tips"
         assert argv == []
+
+
+def test_repl_take_perils_stops_at_next_flag():
+    perils, j = _repl_take_perils(["-p", "hurricane", "flood", "--scenario", "x"], 0, "-p")
+    assert perils == ["hurricane", "flood"]
+    assert j == 3
+
+
+def test_repl_take_perils_long_form():
+    perils, j = _repl_take_perils(["--perils", "hurricane"], 0, "--perils")
+    assert perils == ["hurricane"]
+    assert j == 2
 
 
 def test_risk_analysis_bridge_mock():
