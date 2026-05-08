@@ -51,6 +51,10 @@ class RunSpec(BaseModel):
         default=None,
         description="Subset of outputs to write; None writes everything",
     )
+    explain: bool = Field(
+        default=False,
+        description="If True, log a pre-run transparency manifest (steps, data source, parameters)",
+    )
 
     @field_validator("perils")
     @classmethod
@@ -91,6 +95,7 @@ class RunSpec(BaseModel):
             "random_seed": self.random_seed,
             "output_dir": self.output_dir,
             "artifacts": list(self.artifacts) if self.artifacts is not None else None,
+            "explain": self.explain,
         }
 
 
@@ -110,3 +115,48 @@ def load_run_spec(path: str | Path) -> RunSpec:
     if not isinstance(data, dict):
         raise ValueError("Run spec file must contain a JSON/YAML object")
     return RunSpec.model_validate(data)
+
+
+def merge_cli_run_spec(
+    *,
+    config_path: str | Path | None = None,
+    region: Optional[str] = None,
+    perils: Optional[List[str]] = None,
+    no_mock_data: bool = False,
+    output_dir: Optional[str] = None,
+    scenario_id: Optional[str] = None,
+    monte_carlo_iterations: Optional[int] = None,
+    random_seed: Optional[int] = None,
+    artifacts: Optional[List[str]] = None,
+    explain: Optional[bool] = None,
+) -> RunSpec:
+    """
+    Build a :class:`RunSpec` like the primary ``catia`` CLI: optional ``--config``
+    file plus explicit CLI overrides (same semantics as :func:`load_run_spec` + patch).
+    """
+    spec = load_run_spec(config_path) if config_path else RunSpec()
+    updates: Dict[str, Any] = {}
+
+    if region is not None:
+        updates["region"] = region
+    if perils is not None:
+        updates["perils"] = list(perils)
+    if output_dir is not None:
+        updates["output_dir"] = output_dir
+    if scenario_id is not None:
+        updates["scenario_id"] = scenario_id
+    if monte_carlo_iterations is not None:
+        updates["monte_carlo_iterations"] = monte_carlo_iterations
+    if random_seed is not None:
+        updates["random_seed"] = random_seed
+    if artifacts is not None:
+        updates["artifacts"] = list(artifacts)
+    if explain is not None:
+        updates["explain"] = explain
+
+    use_mock = spec.use_mock_data
+    if no_mock_data:
+        use_mock = False
+    updates["use_mock_data"] = use_mock
+
+    return spec.model_copy(update=updates)

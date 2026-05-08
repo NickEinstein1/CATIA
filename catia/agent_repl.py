@@ -8,13 +8,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import shlex
 import sys
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import click
 from rich.console import Console, Group
-from rich.layout import Layout
 from rich.live import Live
 from rich.panel import Panel
 from rich.spinner import Spinner
@@ -24,7 +24,7 @@ from rich.text import Text
 from catia.agent_bridge import ActuarialResult, ActuarialScience, RiskAnalysis, RiskAnalysisResult
 from catia.config import DEFAULT_PERILS, PERIL_CONFIG, SIMULATION_CONFIG
 from catia.pipeline import run_catia_analysis
-from catia.run_spec import load_run_spec
+from catia.run_spec import KNOWN_ARTIFACTS, load_run_spec, merge_cli_run_spec
 
 
 def _require_perils(tokens: List[str]) -> List[str]:
@@ -202,6 +202,11 @@ async def dispatch_command(
                 "  /spec PATH — run full pipeline from YAML/JSON RunSpec file",
                 "  /json — print last result as highlighted JSON",
                 "  /exit — leave the session",
+                "",
+                "From the shell (outside this REPL):",
+                "  catia-agent run [-c FILE] [-r REGION] [-p PERIL]... [same flags as ``catia``]",
+                "  catia-agent api [--host 0.0.0.0] [--port 8000]",
+                "  catia-agent dashboard [--host 127.0.0.1] [--port 8050] [-v]",
                 "",
                 "Natural language: mention perils, 'simulate', 'train model', 'full pipeline', or regions (e.g. gulf coast).",
             ]
@@ -478,7 +483,7 @@ async def async_repl() -> None:
 @click.group(invoke_without_command=True, context_settings={"help_option_names": ["-h", "--help"]})
 @click.pass_context
 def cli(ctx: click.Context) -> None:
-    """CATIA terminal agent (async REPL)."""
+    """CATIA tools: REPL (default), or ``run`` / ``api`` / ``dashboard`` / ``repl`` like ``catia``."""
     if ctx.invoked_subcommand is None:
         asyncio.run(async_repl())
 
@@ -487,6 +492,168 @@ def cli(ctx: click.Context) -> None:
 def repl_cmd() -> None:
     """Start the interactive agent session (same as bare ``catia-agent``)."""
     asyncio.run(async_repl())
+
+
+@cli.command("dashboard")
+@click.option(
+    "--host",
+    "dashboard_host",
+    default="127.0.0.1",
+    show_default=True,
+    help="Bind address for the Dash server",
+)
+@click.option(
+    "--port",
+    "dashboard_port",
+    default=8050,
+    type=int,
+    show_default=True,
+    help="Port for the Dash server",
+)
+@click.option("-v", "--verbose", is_flag=True, help="Dash debug / verbose logging")
+def dashboard_cmd(dashboard_host: str, dashboard_port: int, verbose: bool) -> None:
+    """Start the Dash system dashboard (same as ``catia --dashboard``)."""
+    try:
+        from catia.dashboard import run_dashboard
+    except ImportError as e:
+        raise click.ClickException(
+            f"Dash required for dashboard: {e}. Install dash: pip install dash"
+        ) from e
+
+    run_dashboard(host=dashboard_host, port=dashboard_port, debug=verbose)
+
+
+@cli.command("run")
+@click.option(
+    "-c",
+    "--config",
+    "config_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=str),
+    default=None,
+    help="YAML/JSON RunSpec (optional)",
+)
+@click.option("-r", "--region", default=None, help="Region override")
+@click.option(
+    "-p",
+    "--peril",
+    "perils",
+    multiple=True,
+    type=click.Choice(["hurricane", "flood", "wildfire", "earthquake", "drought"]),
+    help="Peril (repeatable); same as ``catia -p``",
+)
+@click.option(
+    "--no-mock-data",
+    is_flag=True,
+    help="Use real APIs where implemented (overrides config file)",
+)
+@click.option("-o", "--output-dir", default=None, help="Output directory")
+@click.option("--scenario", "scenario_id", default=None, help="Climate scenario id")
+@click.option("--iterations", type=int, default=None, help="Monte Carlo iterations")
+@click.option("--seed", type=int, default=None, help="Random seed override")
+@click.option(
+    "--artifacts",
+    multiple=True,
+    type=click.Choice(sorted(KNOWN_ARTIFACTS)),
+    help="Output artifact keys (repeatable); default all",
+)
+@click.option("-v", "--verbose", is_flag=True, help="Debug logging")
+@click.option(
+    "--explain",
+    is_flag=True,
+    default=False,
+    help="Log transparency manifest before run (same as ``catia --explain``)",
+)
+def run_cmd(
+    config_path: Optional[str],
+    region: Optional[str],
+    perils: Tuple[str, ...],
+    no_mock_data: bool,
+    output_dir: Optional[str],
+    scenario_id: Optional[str],
+    iterations: Optional[int],
+    seed: Optional[int],
+    artifacts: Tuple[str, ...],
+    verbose: bool,
+    explain: bool,
+) -> None:
+    """One-shot full pipeline (same behavior as ``catia`` without ``--api``/``--dashboard``)."""
+    from catia.cli import setup_logging
+
+    setup_logging(verbose)
+    logger = logging.getLogger(__name__)
+
+    spec = merge_cli_run_spec(
+        config_path=config_path,
+        region=region,
+        perils=list(perils) if perils else None,
+        no_mock_data=no_mock_data,
+        output_dir=output_dir,
+        scenario_id=scenario_id,
+        monte_carlo_iterations=iterations,
+        random_seed=seed,
+        artifacts=list(artifacts) if artifacts else None,
+        explain=(True if explain else None),
+    )
+    kw = spec.to_kwargs()
+    logger.info("Running CATIA analysis (catia-agent run)...")
+    for key in (
+        "region",
+        "perils",
+        "use_mock_data",
+        "scenario_id",
+        "monte_carlo_iterations",
+        "random_seed",
+        "output_dir",
+        "artifacts",
+        "explain",
+    ):
+        logger.info("  %s: %s", key, kw.get(key))
+
+    try:
+        results = run_catia_analysis(**kw)
+    except Exception as e:
+        logger.error("Analysis failed: %s", e, exc_info=verbose)
+        raise SystemExit(1) from e
+
+    print(f"\n{'='*60}")
+    print("CATIA Analysis Complete")
+    print(f"{'='*60}")
+    print(
+        f"Mean Annual Loss: ${results['risk_metrics']['descriptive_stats']['mean']:,.0f}"
+    )
+    print(f"VaR (95%): ${results['risk_metrics']['risk_metrics']['var']:,.0f}")
+    print(f"TVaR (95%): ${results['risk_metrics']['risk_metrics']['tvar']:,.0f}")
+    print(f"{'='*60}")
+
+
+@cli.command("api")
+@click.option(
+    "--host",
+    default="0.0.0.0",
+    show_default=True,
+    help="API bind address (same default as ``catia --api``)",
+)
+@click.option(
+    "--port",
+    default=8000,
+    type=int,
+    show_default=True,
+    help="API port",
+)
+def api_cmd(host: str, port: int) -> None:
+    """Start the FastAPI server (same as ``catia --api``)."""
+    try:
+        import uvicorn
+        from catia.api.app import app
+    except ImportError as e:
+        raise click.ClickException(
+            f"uvicorn required for API: {e}. pip install uvicorn"
+        ) from e
+
+    logging.getLogger(__name__).info(
+        "Starting CATIA API server on %s:%s", host, port
+    )
+    uvicorn.run(app, host=host, port=port)
 
 
 def main() -> None:

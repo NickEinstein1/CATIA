@@ -3,6 +3,7 @@
 from catia.agent_bridge import ActuarialScience, RiskAnalysis
 from catia.agent_repl import interpret_natural_language
 from catia.config import SIMULATION_CONFIG
+from catia.run_spec import merge_cli_run_spec
 
 
 def test_interpret_natural_language_simulate():
@@ -30,6 +31,12 @@ def test_risk_analysis_bridge_mock():
     out = ra.run("US_Gulf_Coast", use_mock_data=True, perils=["hurricane"])
     assert out.model_summary.get("train_status") == "ok"
     assert len(out.data["climate"]) > 0
+
+
+def test_merge_cli_run_spec_overrides_mock():
+    s = merge_cli_run_spec(region="US_East_Coast", no_mock_data=True)
+    assert s.region == "US_East_Coast"
+    assert s.use_mock_data is False
 
 
 def test_actuarial_bridge_small_mc(monkeypatch):

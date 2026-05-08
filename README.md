@@ -60,11 +60,19 @@ catia --dashboard
 ```bash
 catia-agent
 # or: catia-agent repl
+
+# Same entry points as `catia`:
+catia-agent run -r US_Gulf_Coast -p hurricane -p flood
+catia-agent run -c examples/runs/baseline.yaml
+catia-agent api --port 8000
+catia-agent dashboard --port 8050
 ```
 
-Try `/help`, `/run --perils hurricane flood`, or plain English such as *simulate hurricane gulf coast*. The REPL maps **RiskAnalysis** (`data_acquisition` + `risk_prediction`) and **ActuarialScience** (`financial_impact`) through `catia.agent_bridge`.
+Try `/help`, `/run --perils hurricane flood`, or plain English such as *simulate hurricane gulf coast*. The REPL maps **RiskAnalysis** (`data_acquisition` + `risk_prediction`) and **ActuarialScience** (`financial_impact`) through `catia.agent_bridge`. For a plain-language disclosure of data sources, pipeline steps, and limits, see **[Transparency](notebooks/docs/transparency.md)** (MkDocs: *Transparency*). Use **`catia --explain`** / **`catia-agent run --explain`** (or set **`CATIA_EXPLAIN=1`**) to print the same manifest to logs before a run; every **`catia_report.json`** includes **`metadata.transparency`**.
 
 ---
+## Capabilities
+
 | Area | Features |
 | ---- | -------- |
 | **Data** | NOAA/ECMWF/World Bank connectors; cache; mock data for development |
@@ -94,7 +102,7 @@ Try `/help`, `/run --perils hurricane flood`, or plain English such as *simulate
 
 ## Documentation
 
-- **`notebooks/docs/`** — Markdown guides ([regions](notebooks/docs/regions.md), [perils](notebooks/docs/perils.md)). Build with [MkDocs](https://www.mkdocs.org/) (`mkdocs.yml` at repo root):
+- **`notebooks/docs/`** — Markdown guides ([transparency](notebooks/docs/transparency.md), [regions](notebooks/docs/regions.md), [perils](notebooks/docs/perils.md)). Build with [MkDocs](https://www.mkdocs.org/) (`mkdocs.yml` at repo root):
 
   ```bash
   pip install -e ".[docs]"
