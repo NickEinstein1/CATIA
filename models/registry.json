@@ -46,5 +46,93 @@
     "metadata": {
       "n_features": 9
     }
+  },
+  {
+    "version_id": "v_20260507_171506",
+    "path": "C:\\Users\\iankt\\Projects\\CATIA\\models\\risk_model.pkl",
+    "created_at": "2026-05-07T17:15:06.632937",
+    "metadata": {
+      "n_features": 9
+    }
+  },
+  {
+    "version_id": "v_20260507_171609",
+    "path": "C:\\Users\\iankt\\Projects\\CATIA\\models\\risk_model.pkl",
+    "created_at": "2026-05-07T17:16:09.064105",
+    "metadata": {
+      "n_features": 9
+    }
+  },
+  {
+    "version_id": "v_20260507_171731",
+    "path": "C:\\Users\\iankt\\Projects\\CATIA\\models\\risk_model.pkl",
+    "created_at": "2026-05-07T17:17:31.730062",
+    "metadata": {
+      "n_features": 9
+    }
+  },
+  {
+    "version_id": "v_20260507_173206",
+    "path": "C:\\Users\\iankt\\Projects\\CATIA\\models\\risk_model.pkl",
+    "created_at": "2026-05-07T17:32:06.093517",
+    "metadata": {
+      "n_features": 9
+    }
+  },
+  {
+    "version_id": "v_20260507_173619",
+    "path": "C:\\Users\\iankt\\Projects\\CATIA\\models\\risk_model.pkl",
+    "created_at": "2026-05-07T17:36:19.464654",
+    "metadata": {
+      "n_features": 9
+    }
+  },
+  {
+    "version_id": "v_20260507_173633",
+    "path": "C:\\Users\\iankt\\Projects\\CATIA\\models\\risk_model.pkl",
+    "created_at": "2026-05-07T17:36:33.082739",
+    "metadata": {
+      "n_features": 9
+    }
+  },
+  {
+    "version_id": "v_20260507_173634",
+    "path": "C:\\Users\\iankt\\Projects\\CATIA\\models\\risk_model.pkl",
+    "created_at": "2026-05-07T17:36:34.429949",
+    "metadata": {
+      "n_features": 9
+    }
+  },
+  {
+    "version_id": "v_20260507_173634",
+    "path": "C:\\Users\\iankt\\Projects\\CATIA\\models\\risk_model.pkl",
+    "created_at": "2026-05-07T17:36:34.598177",
+    "metadata": {
+      "n_features": 9
+    }
+  },
+  {
+    "version_id": "v_20260507_173635",
+    "path": "C:\\Users\\iankt\\AppData\\Local\\Temp\\tmpi7zxgz0_\\test_model.pkl",
+    "created_at": "2026-05-07T17:36:35.154296",
+    "metadata": {
+      "n_features": 9
+    }
+  },
+  {
+    "version_id": "v_20260507_173635",
+    "path": "C:\\Users\\iankt\\Projects\\CATIA\\models\\risk_model.pkl",
+    "created_at": "2026-05-07T17:36:35.306403",
+    "metadata": {
+      "n_features": 9
+    }
+  },
+  {
+    "version_id": "v_20260507_174051",
+    "path": "C:\\Users\\iankt\\Projects\\CATIA\\models\\risk_model.pkl",
+    "created_at": "2026-05-07T17:40:51.168852",
+    "metadata": {
+      "n_features": 9
+    }
   }
 ]
