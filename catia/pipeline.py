@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 
+from catia import __version__ as _CATIA_VERSION
 from catia.audit import create_audit_metadata, generate_run_id
 from catia.config import DEFAULT_PERILS, OUTPUT_CONFIG, SIMULATION_CONFIG
 from catia.data_acquisition import fetch_all_data
@@ -31,6 +32,7 @@ from catia.risk_prediction import train_risk_model
 from catia.run_spec import RunSpec
 from catia.scenario_analysis import ScenarioAnalyzer
 from catia.sensitivity_analysis import QuickSensitivityAnalysis
+from catia.transparency import build_pipeline_manifest, log_pipeline_manifest
 from catia.visualization import create_dashboard
 
 try:
@@ -59,6 +61,7 @@ def run_catia_analysis(
     random_seed: Optional[int] = None,
     output_dir: Optional[str] = None,
     artifacts: Optional[List[str]] = None,
+    explain: bool = False,
 ) -> Dict[str, Any]:
     """
     Run complete CATIA analysis workflow.
@@ -74,6 +77,7 @@ def run_catia_analysis(
         artifacts: Optional subset of outputs to write; known keys:
             ``report``, ``assumption_register``, ``compliance``, ``dashboard``, ``enhancements``.
             ``None`` writes everything (default).
+        explain: If True, log a pre-run transparency manifest (steps, data, parameters).
 
     Returns:
         Dictionary with all analysis results
@@ -97,6 +101,7 @@ def run_catia_analysis(
             scenario_id=scenario_id,
             out_dir=out_dir,
             artifacts=artifacts,
+            explain=explain,
         )
     finally:
         for key, val in _restore_sim.items():
@@ -111,9 +116,29 @@ def _run_catia_analysis_body(
     scenario_id: Optional[str],
     out_dir: str,
     artifacts: Optional[List[str]],
+    explain: bool,
 ) -> Dict[str, Any]:
     mc_iter_applied = int(SIMULATION_CONFIG["monte_carlo_iterations"])
     run_id = generate_run_id()
+
+    manifest = build_pipeline_manifest(
+        region=region,
+        use_mock_data=use_mock_data,
+        perils=perils,
+        scenario_id=scenario_id,
+        output_dir=out_dir,
+        artifacts=artifacts,
+        monte_carlo_iterations=mc_iter_applied,
+        random_seed=SIMULATION_CONFIG.get("random_seed"),
+        severity_distribution=str(SIMULATION_CONFIG.get("severity_distribution", "Lognormal")),
+        catia_version=_CATIA_VERSION,
+    )
+    effective_explain = explain or (
+        os.environ.get("CATIA_EXPLAIN", "").lower() in ("1", "true", "yes")
+    )
+    if effective_explain:
+        log_pipeline_manifest(manifest, logger)
+
     audit = create_audit_metadata(run_id, region, perils, use_mock_data)
     if _metrics:
         _metrics(region, perils)
@@ -344,6 +369,7 @@ def _run_catia_analysis_body(
             "random_seed": SIMULATION_CONFIG.get("random_seed"),
             "output_dir": out_dir,
             "artifacts": artifacts,
+            "transparency": manifest,
         },
         "audit": audit,
         "data_summary": {

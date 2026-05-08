@@ -10,12 +10,11 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
-from typing import Any, Dict
 
 from catia import __version__
 from catia.config import LOGGING_CONFIG
 from catia.pipeline import run_catia_analysis
-from catia.run_spec import KNOWN_ARTIFACTS, RunSpec, load_run_spec
+from catia.run_spec import KNOWN_ARTIFACTS, RunSpec, merge_cli_run_spec
 
 
 def setup_logging(verbose: bool = False):
@@ -26,30 +25,18 @@ def setup_logging(verbose: bool = False):
 
 def _merge_run_spec(args: argparse.Namespace) -> RunSpec:
     """Build a RunSpec from optional --config and CLI overrides."""
-    base = load_run_spec(args.config) if args.config else RunSpec()
-    updates: Dict[str, Any] = {}
-
-    if args.region is not None:
-        updates["region"] = args.region
-    if args.perils is not None:
-        updates["perils"] = list(args.perils)
-    if args.output_dir is not None:
-        updates["output_dir"] = args.output_dir
-    if args.scenario is not None:
-        updates["scenario_id"] = args.scenario
-    if args.iterations is not None:
-        updates["monte_carlo_iterations"] = args.iterations
-    if args.seed is not None:
-        updates["random_seed"] = args.seed
-    if args.artifacts is not None:
-        updates["artifacts"] = list(args.artifacts)
-
-    use_mock = base.use_mock_data
-    if args.no_mock_data:
-        use_mock = False
-    updates["use_mock_data"] = use_mock
-
-    return base.model_copy(update=updates)
+    return merge_cli_run_spec(
+        config_path=args.config,
+        region=args.region,
+        perils=list(args.perils) if args.perils is not None else None,
+        no_mock_data=args.no_mock_data,
+        output_dir=args.output_dir,
+        scenario_id=args.scenario,
+        monte_carlo_iterations=args.iterations,
+        random_seed=args.seed,
+        artifacts=list(args.artifacts) if args.artifacts is not None else None,
+        explain=(True if getattr(args, "explain", False) else None),
+    )
 
 
 def main():
@@ -64,7 +51,7 @@ Examples:
   catia --region US_Gulf_Coast --perils hurricane flood
   catia --config examples/runs/baseline.yaml -v
   catia --config examples/runs/minimal_report.yaml --output-dir ./my_run
-  catia --scenario high_stress --iterations 5000 --seed 42
+  catia --scenario high_stress --iterations 5000 --seed 42 --explain
   catia --api --port 8000
   catia --dashboard --dashboard-port 8050
   catia --version
@@ -145,6 +132,12 @@ Artifact keys for --artifacts (default: all): {art_list}
         choices=sorted(KNOWN_ARTIFACTS),
         metavar="NAME",
         help="Which output artifacts to write (default: all)",
+    )
+
+    parser.add_argument(
+        "--explain",
+        action="store_true",
+        help="Log a transparency manifest (pipeline steps, data source, parameters) before running",
     )
 
     parser.add_argument(
@@ -241,6 +234,7 @@ Artifact keys for --artifacts (default: all): {art_list}
             "random_seed",
             "output_dir",
             "artifacts",
+            "explain",
         ):
             logger.info("  %s: %s", k, kw.get(k))
 
