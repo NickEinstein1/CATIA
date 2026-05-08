@@ -1,0 +1,8 @@
+{
+  "region": "US_East_Coast",
+  "perils": ["hurricane", "flood"],
+  "use_mock_data": true,
+  "scenario_id": "high_stress",
+  "monte_carlo_iterations": 3000,
+  "artifacts": ["report", "dashboard", "assumption_register"]
+}

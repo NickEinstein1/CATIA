@@ -386,7 +386,7 @@ def _run_analysis_job(job_id: str, request: AnalysisRequest) -> None:
     from catia.api.jobs import set_job_running, set_job_result, set_job_error
     try:
         set_job_running(job_id)
-        from main import run_catia_analysis
+        from catia.pipeline import run_catia_analysis
         raw = run_catia_analysis(
             region=request.region,
             use_mock_data=request.use_mock_data,

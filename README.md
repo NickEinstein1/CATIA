@@ -28,7 +28,7 @@ pip install -e ".[dev]" -r requirements.txt
 **Full pipeline (data → model → simulation → mitigation → report):**
 
 ```python
-from catia.main import run_catia_analysis
+from catia.pipeline import run_catia_analysis
 
 results = run_catia_analysis(
     region="US_Gulf_Coast",
@@ -55,10 +55,16 @@ catia --dashboard
 # http://127.0.0.1:8050 — use --dashboard-port to change port
 ```
 
+**Terminal agent (Rich + Click REPL):** optional `pip install -e ".[agent]"` (or use dev extra, which includes Click & Rich). Interactive session with `/commands`, natural-language shortcuts, `Panel` summaries, `Live` spinners for long runs, and JSON syntax highlighting (`/json`).
+
+```bash
+catia-agent
+# or: catia-agent repl
+```
+
+Try `/help`, `/run --perils hurricane flood`, or plain English such as *simulate hurricane gulf coast*. The REPL maps **RiskAnalysis** (`data_acquisition` + `risk_prediction`) and **ActuarialScience** (`financial_impact`) through `catia.agent_bridge`.
+
 ---
-
-## Capabilities
-
 | Area | Features |
 | ---- | -------- |
 | **Data** | NOAA/ECMWF/World Bank connectors; cache; mock data for development |

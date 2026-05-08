@@ -131,6 +131,7 @@ dmypy.json
 outputs/
 logs/
 models/*.pkl
+data/cache/
 data/mock_*.csv
 *.tmp
 .env.local
