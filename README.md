@@ -28,7 +28,7 @@ pip install -e ".[dev]" -r requirements.txt
 **Full pipeline (data → model → simulation → mitigation → report):**
 
 ```python
-from catia.main import run_catia_analysis
+from catia.pipeline import run_catia_analysis
 
 results = run_catia_analysis(
     region="US_Gulf_Coast",
@@ -55,8 +55,22 @@ catia --dashboard
 # http://127.0.0.1:8050 — use --dashboard-port to change port
 ```
 
----
+**Terminal agent (Rich + Click REPL):** optional `pip install -e ".[agent]"` (or use dev extra, which includes Click & Rich). On startup you get **colorized example prompts** (Windows Terminal or any ANSI terminal); set `RICH_FORCE_COLOR=1` if colors do not show.
 
+```bash
+catia-agent
+# or: catia-agent repl
+
+# Same entry points as `catia`:
+catia-agent run -r US_Gulf_Coast -p hurricane -p flood
+catia-agent run -c examples/runs/baseline.yaml
+catia-agent api --port 8000
+catia-agent dashboard --port 8050
+```
+
+Try `/help`, `/run --perils hurricane flood`, or short plain phrases like *tips*, *help*, or *open dashboard* — analyses themselves require **`/`** commands so input stays deterministic. The REPL maps **RiskAnalysis** (`data_acquisition` + `risk_prediction`) and **ActuarialScience** (`financial_impact`) through `catia.agent_bridge`. For a plain-language disclosure of data sources, pipeline steps, and limits, see **[Transparency](notebooks/docs/transparency.md)** (MkDocs: *Transparency*). Use **`catia --explain`** / **`catia-agent run --explain`** (or set **`CATIA_EXPLAIN=1`**) to print the same manifest to logs before a run; every **`catia_report.json`** includes **`metadata.transparency`**.
+
+---
 ## Capabilities
 
 | Area | Features |
@@ -88,13 +102,83 @@ catia --dashboard
 
 ## Documentation
 
-- **[User guide](docs/USER_GUIDE.md)** — Concepts and pipeline
+- **`notebooks/docs/`** — Markdown guides ([updates](notebooks/docs/updates.md) — when you pull or upgrade, [transparency](notebooks/docs/transparency.md), [regions](notebooks/docs/regions.md), [perils](notebooks/docs/perils.md)). Build with [MkDocs](https://www.mkdocs.org/) (`mkdocs.yml` at repo root):
+
+  ```bash
+  pip install -e ".[docs]"
+  mkdocs serve
+  ```
+
 - **[Tutorial](notebooks/tutorial.ipynb)** — Step-by-step notebook
-- **[Roadmap](docs/ROADMAP.md)** — Strategy and phases
-- **[CAT modeling next](docs/CAT_MODELING_NEXT.md)** — What’s next for best-in-class catastrophe modeling (exposure, vulnerability, event set, spatial)
-- **[Runbook](docs/RUNBOOK.md)** — Run API, env vars, troubleshooting
-- **[Research and citation](docs/RESEARCH_AND_CITATION.md)** — Cite CATIA, reproducibility, model cards
-- **[Docs index](docs/INDEX.md)** — Full documentation map
+
+---
+
+## CLI and API security notes
+
+- **API bind address:** `catia --api` and `catia-agent api` default to **127.0.0.1**. Use `--host 0.0.0.0` only when you mean to listen on all interfaces; pair with firewalls and proper deployment controls in production.
+- **CORS:** Defaults allow common **localhost** dev origins. Set **`CATIA_CORS_ORIGINS`** (comma-separated list) for real browser origins, or **`CATIA_CORS_ALLOW_ANY=1`** for `*` with credentials disabled (development only).
+- **Pickle:** Saved models and some caches use **pickle**. Treat files from others as untrusted; loading them can execute arbitrary code.
+- **Long Monte Carlo runs:** If **`--iterations`** is above **`CATIA_MC_WARN`** (default `50000`), the `catia` and `catia-agent run` CLIs log a warning before starting.
+
+---
+
+## Common issues
+
+### `catia-agent` or `catia` is not recognized (Windows PowerShell)
+
+PowerShell only runs commands that are on **`PATH`**. Console scripts are installed into your virtual environment’s **`Scripts`** folder (e.g. `C:\Users\you\Projects\CATIA\.venv\Scripts\`). If that venv is not active—or you installed without editable mode—the name won’t resolve.
+
+**Fix:**
+
+1. **Activate the venv** from the repo root (prompt should show `(venv)` or `(.venv)`):
+
+   ```powershell
+   .\.venv\Scripts\Activate.ps1
+   ```
+
+2. **Reinstall the package in editable mode** so entry points are generated:
+
+   ```powershell
+   pip install -e ".[dev]"
+   ```
+
+   The **`dev`** extra includes Click and Rich (required for `catia-agent`). You can use `pip install -e ".[agent]"` instead if you only want agent dependencies.
+
+3. **Confirm scripts exist:**
+
+   ```powershell
+   Get-Command catia-agent, catia | Format-Table Name, Source
+   ```
+
+   If `Source` is under `.venv\Scripts\`, you’re good.
+
+**Always-available fallback (no reliance on `PATH` to `Scripts`):** run the module with the same interpreter:
+
+```powershell
+python -m catia.agent_repl
+python -m catia.agent_repl run -r US_Gulf_Coast -p hurricane
+python -m catia.cli --help
+```
+
+Use `python` that belongs to your venv (after `Activate.ps1`, `python` should be the venv one).
+
+### Interactive REPL has no colors (plain text only)
+
+The REPL uses **Rich** for the welcome panel, **`catia›`** prompt, and `/help`. Use **Windows Terminal**, **VS Code integrated terminal**, or another **ANSI-capable** console. If output is unstyled, force Rich to emit color:
+
+```powershell
+$env:RICH_FORCE_COLOR = "1"
+catia-agent
+```
+
+### Agent REPL fails on `ImportError` (Click / Rich)
+
+Install extras: `pip install -e ".[dev]"` or `pip install -e ".[agent]"`.
+
+### Dashboard or API won’t start
+
+- **Dashboard:** `pip install dash` (included in the main `pyproject` dependencies for a normal install).
+- **API:** `pip install uvicorn` (listed with FastAPI in project dependencies; if you used a minimal env, install explicitly).
 
 ---
 

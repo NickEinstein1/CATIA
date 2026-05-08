@@ -3,7 +3,7 @@ Configuration settings for CATIA system.
 Manages API endpoints, model parameters, and simulation settings.
 
 Environment-based config: place a .env file in the project root (or set env vars).
-Supported: CATIA_*, NOAA_API_TOKEN. See docs/RUNBOOK.md and docs/NEXT.md.
+Supported: CATIA_*, NOAA_API_TOKEN, CATIA_EXPLAIN (set to 1 to log pipeline transparency manifest). See docs transparency guide.
 """
 
 import os

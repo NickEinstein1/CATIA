@@ -7,7 +7,7 @@ import logging
 import os
 import numpy as np
 import pandas as pd
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
@@ -297,20 +297,26 @@ class CATIAVisualizer:
 # HELPER FUNCTIONS
 # ============================================================================
 
-def create_dashboard(analysis_results: Dict, climate_data: pd.DataFrame, 
-                    cba_df: pd.DataFrame) -> str:
+def create_dashboard(
+    analysis_results: Dict,
+    climate_data: pd.DataFrame,
+    cba_df: pd.DataFrame,
+    output_dir: Optional[str] = None,
+) -> str:
     """
     Create comprehensive dashboard.
-    
+
     Args:
         analysis_results: Financial impact analysis results
         climate_data: Climate data
         cba_df: Cost-benefit analysis DataFrame
-    
+        output_dir: Directory for HTML assets (defaults to OUTPUT_CONFIG)
+
     Returns:
-        Path to dashboard HTML file
+        Path to dashboard HTML file directory
     """
-    visualizer = CATIAVisualizer()
+    base = output_dir or OUTPUT_CONFIG["output_dir"]
+    visualizer = CATIAVisualizer(output_dir=base)
     
     # Extract data
     losses = analysis_results['simulation_results']['all_losses']

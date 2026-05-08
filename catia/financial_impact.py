@@ -889,7 +889,7 @@ def run_multi_peril_analysis(perils: List[str] = None,
             copula_type=copula_type,
             scenario_id=scenario_id,
         )
-        results = simulator.simulate_all_perils()
+        results = simulator.simulate_all_perils(num_iterations)
         contributions = simulator.get_peril_contribution(results)
 
     output = {

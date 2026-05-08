@@ -58,11 +58,22 @@ dev = [
     "black>=23.0.0",
     "flake8>=6.0.0",
     "mypy>=1.5.0",
+    "click>=8.1.0",
+    "rich>=13.7.0",
+]
+docs = [
+    "mkdocs>=1.6.0",
+    "mkdocs-material>=9.5.0",
+]
+agent = [
+    "click>=8.1.0",
+    "rich>=13.7.0",
 ]
 
 [project.scripts]
 catia = "catia.cli:main"
 catia-dashboard = "catia.dashboard:run_dashboard"
+catia-agent = "catia.agent_repl:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
