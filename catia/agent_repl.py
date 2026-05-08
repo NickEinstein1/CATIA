@@ -46,6 +46,9 @@ AGENT_TIPS: Tuple[str, ...] = (
     "pytest tests/ and examples/… configs are the fastest check after changing peril or region logic.",
 )
 
+# Rich markup label for Prompt.ask inside the async REPL (defined once for reuse).
+REPL_PROMPT_MARKUP = "[bold cyan]catia[/bold cyan] [dim]>[/dim] "
+
 
 def _quick_tips_rich() -> Text:
     """Three high-value tips on the welcome screen."""

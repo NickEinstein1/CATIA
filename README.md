@@ -102,7 +102,7 @@ Try `/help`, `/run --perils hurricane flood`, or plain English such as *simulate
 
 ## Documentation
 
-- **`notebooks/docs/`** — Markdown guides ([transparency](notebooks/docs/transparency.md), [regions](notebooks/docs/regions.md), [perils](notebooks/docs/perils.md)). Build with [MkDocs](https://www.mkdocs.org/) (`mkdocs.yml` at repo root):
+- **`notebooks/docs/`** — Markdown guides ([updates](notebooks/docs/updates.md) — when you pull or upgrade, [transparency](notebooks/docs/transparency.md), [regions](notebooks/docs/regions.md), [perils](notebooks/docs/perils.md)). Build with [MkDocs](https://www.mkdocs.org/) (`mkdocs.yml` at repo root):
 
   ```bash
   pip install -e ".[docs]"
