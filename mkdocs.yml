@@ -17,6 +17,7 @@ theme:
 
 nav:
   - Home: index.md
+  - Updates: updates.md
   - Transparency: transparency.md
   - Regions: regions.md
   - Perils: perils.md

@@ -4,6 +4,7 @@ Developer-facing documentation for the CATIA catastrophe-risk toolkit. Sources l
 
 ## Contents
 
+- [Updates](updates.md) — refreshing your environment after pulling git changes or upgrading from PyPI.
 - [Regions](regions.md) — supported geographic region identifiers and how they are used across the codebase.
 - [Perils](perils.md) — modeled peril slugs (`PERIL_CONFIG`), defaults, and extension checklist.
 
