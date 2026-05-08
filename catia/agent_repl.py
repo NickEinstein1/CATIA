@@ -173,6 +173,18 @@ def _parse_region(text: str) -> Optional[str]:
     return None
 
 
+def _repl_take_perils(argv: List[str], start: int, flag: str) -> Tuple[List[str], int]:
+    """Parse tokens after ``--perils`` or ``-p`` until the next option. Returns ``(perils, next_index)``."""
+    i = start + 1
+    if i >= len(argv) or argv[i].startswith("-"):
+        raise click.UsageError(f"{flag} requires at least one peril name")
+    out: List[str] = []
+    while i < len(argv) and not argv[i].startswith("-"):
+        out.append(argv[i])
+        i += 1
+    return out, i
+
+
 def interpret_natural_language(text: str) -> Tuple[str, List[str]]:
     """
     Map free text to a pseudo-command and args for the dispatcher.
@@ -321,10 +333,11 @@ async def dispatch_command(
         if verb == "/help":
             help_text = Text.from_markup(
                 "[bold cyan]Structured[/bold cyan] [dim](prefix [green]/[/green]):[/dim]\n"
-                "  [green]/run[/green]  [dim][--region R] [--perils P …] [--real] [--scenario S] "
-                "[--iterations N] [--output-dir D][/dim]\n"
-                "  [green]/risk[/green]   [dim]— fetch data + train [RiskAnalysis][/dim]\n"
-                "  [green]/simulate[/green]  [dim]— Monte Carlo multi-peril [ActuarialScience][/dim]\n"
+                "  [green]/run[/green]  [dim][-r|--region R] [-p|--perils P …] [--real] [--scenario S] "
+                "[--iterations N] [-o|--output-dir D][/dim]\n"
+                "  [green]/risk[/green]   [dim][-r|--region R] [-p|--perils P …] [--real|--mock][/dim]\n"
+                "  [green]/simulate[/green]  [dim][-p|--perils P …] [--scenario S] [--iterations N] "
+                "[--no-uncertainty][/dim]\n"
                 "  [green]/spec[/green] [yellow]PATH[/yellow]  [dim]— YAML/JSON [RunSpec][/dim]\n"
                 "  [green]/json[/green]  [green]/tips[/green]  [green]/help[/green]  [green]/exit[/green]\n\n"
                 "[bold cyan]Shell[/bold cyan] [dim](outside this REPL):[/dim]\n"
@@ -387,16 +400,12 @@ async def dispatch_command(
             i = 0
             while i < len(argv):
                 a = argv[i]
-                if a == "--region" and i + 1 < len(argv):
+                if a in ("--region", "-r") and i + 1 < len(argv):
                     region = argv[i + 1]
                     i += 2
                     continue
-                if a == "--perils" and i + 1 < len(argv):
-                    perils = []
-                    i += 1
-                    while i < len(argv) and not argv[i].startswith("-"):
-                        perils.append(argv[i])
-                        i += 1
+                if a in ("--perils", "-p"):
+                    perils, i = _repl_take_perils(argv, i, a)
                     continue
                 if a == "--real":
                     use_mock = False
@@ -448,12 +457,8 @@ async def dispatch_command(
             i = 0
             while i < len(argv):
                 a = argv[i]
-                if a == "--perils" and i + 1 < len(argv):
-                    perils = []
-                    i += 1
-                    while i < len(argv) and not argv[i].startswith("-"):
-                        perils.append(argv[i])
-                        i += 1
+                if a in ("--perils", "-p"):
+                    perils, i = _repl_take_perils(argv, i, a)
                     continue
                 if a == "--scenario" and i + 1 < len(argv):
                     scenario_id = argv[i + 1]
@@ -510,16 +515,12 @@ async def dispatch_command(
             i = 0
             while i < len(argv):
                 a = argv[i]
-                if a == "--region" and i + 1 < len(argv):
+                if a in ("--region", "-r") and i + 1 < len(argv):
                     region = argv[i + 1]
                     i += 2
                     continue
-                if a == "--perils" and i + 1 < len(argv):
-                    perils = []
-                    i += 1
-                    while i < len(argv) and not argv[i].startswith("-"):
-                        perils.append(argv[i])
-                        i += 1
+                if a in ("--perils", "-p"):
+                    perils, i = _repl_take_perils(argv, i, a)
                     continue
                 if a == "--real":
                     use_mock = False
@@ -537,7 +538,7 @@ async def dispatch_command(
                     iterations = int(argv[i + 1])
                     i += 2
                     continue
-                if a == "--output-dir" and i + 1 < len(argv):
+                if a in ("--output-dir", "-o") and i + 1 < len(argv):
                     output_dir = argv[i + 1]
                     i += 2
                     continue
@@ -652,10 +653,11 @@ def dashboard_cmd(dashboard_host: str, dashboard_port: int, verbose: bool) -> No
 @click.option(
     "-p",
     "--peril",
+    "--perils",
     "perils",
     multiple=True,
     type=click.Choice(["hurricane", "flood", "wildfire", "earthquake", "drought"]),
-    help="Peril (repeatable); same as ``catia -p``",
+    help="Peril (repeat); same as ``catia -p`` / ``catia --perils``",
 )
 @click.option(
     "--no-mock-data",
@@ -693,7 +695,7 @@ def run_cmd(
     explain: bool,
 ) -> None:
     """One-shot full pipeline (same behavior as ``catia`` without ``--api``/``--dashboard``)."""
-    from catia.cli import setup_logging
+    from catia.cli import _mc_iterations_warn_threshold, setup_logging
 
     setup_logging(verbose)
     logger = logging.getLogger(__name__)
@@ -725,6 +727,16 @@ def run_cmd(
     ):
         logger.info("  %s: %s", key, kw.get(key))
 
+    mc = kw.get("monte_carlo_iterations")
+    thr = _mc_iterations_warn_threshold()
+    if mc is not None and mc > thr:
+        logger.warning(
+            "monte_carlo_iterations=%s exceeds warn threshold %s "
+            "(raise CATIA_MC_WARN to silence); run may take a long time.",
+            mc,
+            thr,
+        )
+
     try:
         results = run_catia_analysis(**kw)
     except Exception as e:
@@ -745,9 +757,9 @@ def run_cmd(
 @cli.command("api")
 @click.option(
     "--host",
-    default="0.0.0.0",
+    default="127.0.0.1",
     show_default=True,
-    help="API bind address (same default as ``catia --api``)",
+    help="API bind address (use 0.0.0.0 for all interfaces; default loopback)",
 )
 @click.option(
     "--port",

@@ -9,12 +9,20 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 
 from catia import __version__
 from catia.config import LOGGING_CONFIG
 from catia.pipeline import run_catia_analysis
 from catia.run_spec import KNOWN_ARTIFACTS, RunSpec, merge_cli_run_spec
+
+
+def _mc_iterations_warn_threshold() -> int:
+    try:
+        return max(1, int(os.environ.get("CATIA_MC_WARN", "50000")))
+    except ValueError:
+        return 50000
 
 
 def setup_logging(verbose: bool = False):
@@ -53,10 +61,17 @@ Examples:
   catia --config examples/runs/minimal_report.yaml --output-dir ./my_run
   catia --scenario high_stress --iterations 5000 --seed 42 --explain
   catia --api --port 8000
+  catia --api --host 0.0.0.0 --port 8000
   catia --dashboard --dashboard-port 8050
   catia --version
 
 Artifact keys for --artifacts (default: all): {art_list}
+
+API bind defaults to loopback for safety; use --host 0.0.0.0 to listen on all interfaces.
+--no-mock-data may perform outbound HTTP and requires API keys where connectors need them.
+
+Large --iterations values can run for a long time; values above the threshold set by
+CATIA_MC_WARN (default 50000) log a warning before the run.
         """,
     )
 
@@ -167,8 +182,8 @@ Artifact keys for --artifacts (default: all): {art_list}
 
     parser.add_argument(
         "--host",
-        default="0.0.0.0",
-        help="API server host (default: 0.0.0.0)",
+        default="127.0.0.1",
+        help="API server host (default: 127.0.0.1; use 0.0.0.0 for all interfaces)",
     )
 
     parser.add_argument(
@@ -237,6 +252,16 @@ Artifact keys for --artifacts (default: all): {art_list}
             "explain",
         ):
             logger.info("  %s: %s", k, kw.get(k))
+
+        mc = kw.get("monte_carlo_iterations")
+        thr = _mc_iterations_warn_threshold()
+        if mc is not None and mc > thr:
+            logger.warning(
+                "monte_carlo_iterations=%s exceeds warn threshold %s "
+                "(raise CATIA_MC_WARN to silence); run may take a long time.",
+                mc,
+                thr,
+            )
 
         results = run_catia_analysis(**kw)
 
