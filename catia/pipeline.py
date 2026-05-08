@@ -279,11 +279,11 @@ def _run_catia_analysis_body(
             f"{agg_metrics['descriptive_stats']['mean']:,.0f}",
         )
         logger.info(
-            "✓ Aggregate VaR (95%): $%s",
+            "✓ Aggregate VaR (95%%): $%s",
             f"{agg_metrics['risk_metrics']['var']:,.0f}",
         )
         logger.info(
-            "✓ Aggregate TVaR (95%): $%s",
+            "✓ Aggregate TVaR (95%%): $%s",
             f"{agg_metrics['risk_metrics']['tvar']:,.0f}",
         )
 
@@ -512,7 +512,7 @@ def _run_catia_analysis_body(
         f"{results['risk_metrics']['descriptive_stats']['mean']:,.0f}",
     )
     logger.info(
-        "VaR (95%): $%s",
+        "VaR (95%%): $%s",
         f"{results['risk_metrics']['risk_metrics']['var']:,.0f}",
     )
     logger.info(

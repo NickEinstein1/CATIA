@@ -68,7 +68,7 @@ catia-agent api --port 8000
 catia-agent dashboard --port 8050
 ```
 
-Try `/help`, `/run --perils hurricane flood`, or plain English such as *simulate hurricane gulf coast*. The REPL maps **RiskAnalysis** (`data_acquisition` + `risk_prediction`) and **ActuarialScience** (`financial_impact`) through `catia.agent_bridge`. For a plain-language disclosure of data sources, pipeline steps, and limits, see **[Transparency](notebooks/docs/transparency.md)** (MkDocs: *Transparency*). Use **`catia --explain`** / **`catia-agent run --explain`** (or set **`CATIA_EXPLAIN=1`**) to print the same manifest to logs before a run; every **`catia_report.json`** includes **`metadata.transparency`**.
+Try `/help`, `/run --perils hurricane flood`, or short plain phrases like *tips*, *help*, or *open dashboard* — analyses themselves require **`/`** commands so input stays deterministic. The REPL maps **RiskAnalysis** (`data_acquisition` + `risk_prediction`) and **ActuarialScience** (`financial_impact`) through `catia.agent_bridge`. For a plain-language disclosure of data sources, pipeline steps, and limits, see **[Transparency](notebooks/docs/transparency.md)** (MkDocs: *Transparency*). Use **`catia --explain`** / **`catia-agent run --explain`** (or set **`CATIA_EXPLAIN=1`**) to print the same manifest to logs before a run; every **`catia_report.json`** includes **`metadata.transparency`**.
 
 ---
 ## Capabilities

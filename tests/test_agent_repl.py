@@ -1,29 +1,26 @@
-"""Tests for CATIA terminal agent (NL routing + bridge)."""
+"""Tests for CATIA terminal agent (NL shortcuts + bridge)."""
 
 from catia.agent_bridge import ActuarialScience, RiskAnalysis
-from catia.agent_repl import _repl_take_perils, interpret_natural_language
+from catia.agent_repl import (
+    _repl_take_artifact_names,
+    _repl_take_perils,
+    interpret_natural_language,
+)
 from catia.config import SIMULATION_CONFIG
 from catia.run_spec import merge_cli_run_spec
 
 
-def test_interpret_natural_language_simulate():
-    verb, argv = interpret_natural_language("run a monte carlo for hurricane on gulf coast")
-    assert verb == "simulate"
-    assert "--perils" in argv
-    assert "hurricane" in argv
-
-
-def test_interpret_natural_language_risk():
-    verb, argv = interpret_natural_language("train the risk model for flood")
-    assert verb == "risk"
-    assert "flood" in argv
-
-
-def test_interpret_natural_language_full():
-    verb, argv = interpret_natural_language("full pipeline for the east coast")
-    assert verb == "run"
-    assert "--region" in argv
-    assert "US_East_Coast" in argv
+def test_interpret_natural_language_plain_text_does_not_run_pipeline():
+    for phrase in (
+        "run a monte carlo for hurricane on gulf coast",
+        "train the risk model for flood",
+        "full pipeline for the east coast",
+        "hurricane variation on the gulf coast",
+        "compute var for hurricane gulf",
+    ):
+        verb, argv = interpret_natural_language(phrase)
+        assert verb == "repl_suggest_slash"
+        assert argv == []
 
 
 def test_interpret_natural_language_tips():
@@ -31,6 +28,27 @@ def test_interpret_natural_language_tips():
         verb, argv = interpret_natural_language(phrase)
         assert verb == "tips"
         assert argv == []
+
+
+def test_interpret_natural_language_dashboard():
+    verb, argv = interpret_natural_language("start the dashboard")
+    assert verb == "dashboard"
+    assert argv == []
+
+
+def test_interpret_natural_language_help():
+    for phrase in ("help", "?", "hi", "hello", "please help"):
+        verb, argv = interpret_natural_language(phrase)
+        assert verb == "help"
+        assert argv == []
+
+
+def test_repl_take_artifact_names():
+    names, j = _repl_take_artifact_names(
+        ["--artifacts", "report", "dashboard", "--region", "x"], 0, "--artifacts"
+    )
+    assert names == ["report", "dashboard"]
+    assert j == 3
 
 
 def test_repl_take_perils_stops_at_next_flag():
