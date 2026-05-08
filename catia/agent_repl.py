@@ -10,9 +10,12 @@ import asyncio
 import json
 import logging
 import shlex
+import threading
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import click
+from rich import box
 from rich.console import Console, Group
 from rich.live import Live
 from rich.panel import Panel
@@ -23,19 +26,28 @@ from rich.table import Table
 from rich.text import Text
 
 from catia.agent_bridge import ActuarialResult, ActuarialScience, RiskAnalysis, RiskAnalysisResult
-from catia.config import DEFAULT_PERILS, PERIL_CONFIG, SIMULATION_CONFIG
+from catia.config import DEFAULT_PERILS, SIMULATION_CONFIG
 from catia.pipeline import run_catia_analysis
 from catia.run_spec import KNOWN_ARTIFACTS, load_run_spec, merge_cli_run_spec
+
+# Default /run (and default RunSpec example) skips static HTML charts; add dashboard via
+# ``/run --full``, ``/run --artifacts dashboard …``, or ``catia-agent dashboard``.
+REPL_RUN_ARTIFACTS: Tuple[str, ...] = (
+    "report",
+    "assumption_register",
+    "compliance",
+    "enhancements",
+)
 
 # One-line hints (plain text); shown in /tips and rotated occasionally before the prompt.
 AGENT_TIPS: Tuple[str, ...] = (
     "Default runs use mock/synthetic data — fine for demos; pair --real with NOAA_API_TOKEN for climate pulls.",
     "After /run or /risk, type /json to inspect results; catia_report.json includes metadata.transparency.",
     "Shell: catia-agent run --explain (or CATIA_EXPLAIN=1) prints what the pipeline will do before it runs.",
-    "Faster iteration: catia-agent run -p hurricane only, or use examples/runs/minimal_report.yaml with artifacts: [report].",
+    "In the REPL, /run skips static Plotly HTML by default; use /run --full or /run --artifacts dashboard … to emit charts.",
     "Regions are coarse labels (e.g. US_Gulf_Coast), not city polygons — extend the stack for asset-level work.",
     "/simulate skips mitigation and reports; use /run for the full pipeline to outputs/.",
-    "Natural language: include peril names (hurricane, flood) and words like simulate, train model, or gulf coast.",
+    "Analyses need slash commands (/run, /simulate, /risk) — plain English won’t start the pipeline (only tips/help/dashboard shortcuts).",
     "Stuck? python -m catia.agent_repl avoids PATH issues on Windows if catia-agent is not found.",
     "Dashboard & API: catia-agent dashboard and catia-agent api mirror catia --dashboard and catia --api.",
     "SHAP feature importance needs CATIA_USE_SHAP=1 and runs in the full /run path when SHAP is installed.",
@@ -46,7 +58,6 @@ AGENT_TIPS: Tuple[str, ...] = (
     "pytest tests/ and examples/… configs are the fastest check after changing peril or region logic.",
 )
 
-# Rich markup label for Prompt.ask inside the async REPL (defined once for reuse).
 REPL_PROMPT_MARKUP = "[bold cyan]catia[/bold cyan] [dim]>[/dim] "
 
 
@@ -92,14 +103,13 @@ EXAMPLE_PROMPTS_INTRO = (
 def _example_prompts_block() -> Text:
     return Text.from_markup(
         f"{EXAMPLE_PROMPTS_INTRO}\n"
-        "[green]/run[/green] [dim]-r US_Gulf_Coast -p hurricane -p flood[/dim]\n"
-        "[green]/run[/green] [dim]--scenario high_stress --iterations 3000[/dim]\n"
-        "[magenta]simulate hurricane flood for the gulf coast[/magenta]  "
-        "[dim]— natural language → actuarial MC[/dim]\n"
-        "[magenta]train the risk model for flood[/magenta]  "
-        "[dim]— data + ML only[/dim]\n"
+        "[green]/run[/green] [dim]-r US_Gulf_Coast -p hurricane -p flood[/dim]  [dim](no static HTML charts)[/dim]\n"
+        "[green]/run[/green] [dim]--full[/dim]  [dim]— same + Plotly bundle in outputs/[/dim]\n"
+        "[green]/simulate[/green] [dim]-p hurricane -p flood[/dim]  "
+        "[dim]— Monte Carlo (no fuzzy plain-text routing)[/dim]\n"
         "[green]/risk[/green] [dim]--region US_East_Coast --perils hurricane[/dim]\n"
-        "[green]/spec[/green] [dim]examples/runs/baseline.yaml[/dim]\n"
+        "[green]/spec[/green] [dim](default:[/dim] examples/runs/baseline.yaml[dim])[/dim] "
+        "[yellow][PATH][/yellow]\n"
         "[green]/json[/green] [dim]— pretty-print last result[/dim]\n"
         "[green]/tips[/green]  [dim]— all hints (or type[/dim] [magenta]tips[/magenta] [dim]in plain English)[/dim]\n"
         "[green]/help[/green]  [dim]— full command list[/dim]\n"
@@ -112,7 +122,7 @@ def _print_repl_welcome(console: Console) -> None:
         "[bold cyan]CATIA agent[/bold cyan] — interactive multi-peril modeling.\n"
         "[dim]Slash commands[/dim] [bright_white]/run[/bright_white], "
         "[bright_white]/risk[/bright_white], [bright_white]/simulate[/bright_white] … "
-        "[dim]or plain English.[/dim]"
+        "[dim]Type[/dim] [yellow]/[/yellow] [dim]commands for models; plain shortcuts: tips, help, dashboard.[/dim]"
     )
     body = Group(header, Text(""), _example_prompts_block(), Text(""), _quick_tips_rich())
     console.print(
@@ -141,38 +151,6 @@ async def _prompt_line(console: Console) -> str:
     return await asyncio.to_thread(_read)
 
 
-def _require_perils(tokens: List[str]) -> List[str]:
-    out: List[str] = []
-    for t in tokens:
-        if t in PERIL_CONFIG and t not in out:
-            out.append(t)
-    return out
-
-
-def _parse_region(text: str) -> Optional[str]:
-    low = text.lower()
-    mapping = [
-        ("gulf", "US_Gulf_Coast"),
-        ("east coast", "US_East_Coast"),
-        ("west coast", "US_West_Coast"),
-        ("midwest", "US_Midwest"),
-    ]
-    for key, rid in mapping:
-        if key in low:
-            return rid
-    for rid in (
-        "US_Gulf_Coast",
-        "US_East_Coast",
-        "US_West_Coast",
-        "US_Midwest",
-        "Caribbean",
-        "Europe",
-    ):
-        if rid.lower().replace("_", " ") in low or rid in text:
-            return rid
-    return None
-
-
 def _repl_take_perils(argv: List[str], start: int, flag: str) -> Tuple[List[str], int]:
     """Parse tokens after ``--perils`` or ``-p`` until the next option. Returns ``(perils, next_index)``."""
     i = start + 1
@@ -185,11 +163,29 @@ def _repl_take_perils(argv: List[str], start: int, flag: str) -> Tuple[List[str]
     return out, i
 
 
+def _repl_take_artifact_names(argv: List[str], start: int, flag: str) -> Tuple[List[str], int]:
+    """Parse artifact keys after ``--artifacts`` until the next option."""
+    i = start + 1
+    if i >= len(argv) or argv[i].startswith("-"):
+        raise click.UsageError(f"{flag} requires at least one artifact name")
+    out: List[str] = []
+    while i < len(argv) and not argv[i].startswith("-"):
+        name = argv[i]
+        if name not in KNOWN_ARTIFACTS:
+            raise click.UsageError(
+                f"Unknown artifact {name!r}. Valid: {', '.join(sorted(KNOWN_ARTIFACTS))}"
+            )
+        out.append(name)
+        i += 1
+    return out, i
+
+
 def interpret_natural_language(text: str) -> Tuple[str, List[str]]:
     """
-    Map free text to a pseudo-command and args for the dispatcher.
+    Map a **non-slash** line to at most a handful of conversational commands.
 
-    Returns (verb, argv) where argv excludes the verb.
+    Pipeline work (**/run**, **/risk**, **/simulate**, …) is intentionally **not**
+    inferred from free text — users must type slash commands for deterministic parsing.
     """
     t = text.strip()
     low = t.lower()
@@ -200,54 +196,43 @@ def interpret_natural_language(text: str) -> Tuple[str, List[str]]:
     if "tip" in toks and any(w in toks for w in ("show", "list", "more", "give")):
         return "tips", []
 
-    region = _parse_region(t) or "US_Gulf_Coast"
-    perils = _require_perils(low.split())
-    if not perils:
-        perils = list(DEFAULT_PERILS)
-
-    actuarial_kw = any(
-        k in low
-        for k in (
-            "simulate",
-            "simulation",
-            "monte carlo",
-            "montecarlo",
-            "var",
-            "tvar",
-            "loss",
-            "actuarial",
+    if any(
+        phrase in low
+        for phrase in (
+            "dashboard",
+            "dash board",
+            "start dashboard",
+            "open dashboard",
+            "show dashboard",
         )
-    )
-    risk_kw = any(
-        k in low
-        for k in ("train", "model", "ml", "feature", "risk model", "predict")
-    )
-    full_kw = any(
-        k in low
-        for k in ("full pipeline", "full analysis", "everything", "end to end", "end-to-end")
-    )
-
-    if full_kw or (not actuarial_kw and not risk_kw and "help" not in low):
-        args = ["--region", region, "--perils", *perils]
-        return "run", args
-
-    if actuarial_kw and not risk_kw:
-        args = ["--perils", *perils]
-        if "baseline" in low:
-            args.extend(["--scenario", "baseline"])
-        if "stress" in low or "high stress" in low:
-            args.extend(["--scenario", "high_stress"])
-        return "simulate", args
-
-    if risk_kw and not actuarial_kw:
-        args = ["--region", region, "--perils", *perils]
-        return "risk", args
+    ):
+        return "dashboard", []
 
     if "help" in low or low in ("?", "hi", "hello"):
         return "help", []
 
-    args = ["--region", region, "--perils", *perils]
-    return "run", args
+    return "repl_suggest_slash", []
+
+
+def _print_non_slash_hint(console: Console, line: str) -> None:
+    """Tell the user analyses require ``/`` commands (no fuzzy NL routing)."""
+    shown = line if len(line) <= 120 else line[:117] + "…"
+    console.print(
+        Panel(
+            Text.from_markup(
+                "This REPL only runs models on [bold]/commands[/bold] so input stays "
+                "deterministic (no guessing intent from free text).\n\n"
+                f"You typed: [yellow]{shown}[/yellow]\n\n"
+                "Try [green]/help[/green] for all commands, or e.g. "
+                "[green]/run[/green] [dim]-p hurricane[/dim], "
+                "[green]/simulate[/green] [dim]-p flood[/dim], "
+                "[green]/risk[/green] [dim]-p hurricane[/dim].\n"
+                "[dim]Plain shortcuts still work: “tips”, “help”, “open dashboard”.[/dim]"
+            ),
+            title="[bold]Use a / command[/bold]",
+            border_style="yellow",
+        )
+    )
 
 
 def _print_error(console: Console, title: str, exc: BaseException) -> None:
@@ -271,11 +256,37 @@ def _json_panel(console: Console, data: Any, title: str) -> None:
     console.print(Panel(syntax, title=title, border_style="green"))
 
 
-def _summary_panel(
-    console: Console, title: str, lines: List[str]
+def _summary_table(
+    console: Console,
+    title: str,
+    rows: List[Tuple[str, str]],
+    *,
+    hint: Optional[str] = None,
 ) -> None:
-    body = Group(*[Text(line) for line in lines])
-    console.print(Panel(body, title=title, border_style="cyan"))
+    """Print a key/value summary as a bordered table inside a panel."""
+    table = Table(
+        show_header=True,
+        header_style="bold cyan",
+        border_style="cyan",
+        box=box.ROUNDED,
+        expand=False,
+        padding=(0, 1),
+    )
+    table.add_column("Metric", style="dim", no_wrap=False, ratio=1)
+    table.add_column("Value", style="bold default", no_wrap=False, ratio=2)
+    for label, value in rows:
+        table.add_row(label, value)
+    parts: List[Any] = [table]
+    if hint:
+        parts.extend([Text(""), Text(hint, style="dim italic")])
+    console.print(
+        Panel(
+            Group(*parts),
+            title=f"[bold bright_cyan]{title}[/bold bright_cyan]",
+            border_style="cyan",
+            padding=(1, 2),
+        )
+    )
 
 
 async def _run_blocking(
@@ -299,6 +310,9 @@ class AgentSession:
         self.last_result: Any = None
         self.last_label: str = "last"
         self.prompt_count: int = 0
+        self.dashboard_thread: Optional[threading.Thread] = None
+        self.dashboard_host: str = "127.0.0.1"
+        self.dashboard_port: int = 8050
 
 
 async def dispatch_command(
@@ -319,6 +333,9 @@ async def dispatch_command(
         argv = parts[1:]
     else:
         verb, argv = interpret_natural_language(stripped)
+        if verb == "repl_suggest_slash":
+            _print_non_slash_hint(console, stripped)
+            return True
         verb = "/" + verb
 
     try:
@@ -334,22 +351,98 @@ async def dispatch_command(
             help_text = Text.from_markup(
                 "[bold cyan]Structured[/bold cyan] [dim](prefix [green]/[/green]):[/dim]\n"
                 "  [green]/run[/green]  [dim][-r|--region R] [-p|--perils P …] [--real] [--scenario S] "
-                "[--iterations N] [-o|--output-dir D][/dim]\n"
+                "[--iterations N] [-o|--output-dir D] [--full | --artifacts A …][/dim]\n"
+                "      [dim](REPL default skips static Plotly HTML under outputs/;[/dim] [green]--full[/green] "
+                "[dim]enables all artifacts.)[/dim]\n"
                 "  [green]/risk[/green]   [dim][-r|--region R] [-p|--perils P …] [--real|--mock][/dim]\n"
                 "  [green]/simulate[/green]  [dim][-p|--perils P …] [--scenario S] [--iterations N] "
                 "[--no-uncertainty][/dim]\n"
-                "  [green]/spec[/green] [yellow]PATH[/yellow]  [dim]— YAML/JSON [RunSpec][/dim]\n"
+                "  [green]/spec[/green] [yellow][PATH][/yellow]  [dim]— YAML/JSON [RunSpec]; default:[/dim] "
+                "[dim]examples/runs/baseline.yaml[/dim]\n"
+                "  [green]/dashboard[/green]  [dim][--host H] [--port P] [-v][/dim]  [dim]— Dash UI in background[/dim]\n"
                 "  [green]/json[/green]  [green]/tips[/green]  [green]/help[/green]  [green]/exit[/green]\n\n"
                 "[bold cyan]Shell[/bold cyan] [dim](outside this REPL):[/dim]\n"
                 "  [magenta]catia-agent run …[/magenta]   [magenta]catia-agent api …[/magenta]   "
                 "[magenta]catia-agent dashboard …[/magenta]\n\n"
-                "[bold cyan]Natural language[/bold cyan] [dim](no [green]/[/green]):[/dim] name "
-                "[yellow]perils[/yellow], [yellow]gulf coast[/yellow], "
-                "[yellow]simulate[/yellow], [yellow]train model[/yellow], [yellow]full pipeline[/yellow], "
-                "[yellow]tips[/yellow]."
+        "[bold cyan]Plain text[/bold cyan] [dim](no [green]/[/green]): only[/dim] "
+        "[yellow]tips[/yellow][dim],[/dim] [yellow]help[/yellow][dim],[/dim] [yellow]dashboard[/yellow] "
+        "[dim]shortcuts — everything else must use[/dim] [green]/run[/green][dim],[/dim] "
+        "[green]/risk[/green][dim],[/dim] [green]/simulate[/green][dim], etc.[/dim]"
             )
             console.print(
                 Panel(help_text, title="[bold]CATIA agent — help[/bold]", border_style="cyan")
+            )
+            return True
+
+        if verb == "/dashboard":
+            try:
+                from catia.dashboard import run_dashboard
+            except ImportError as e:
+                raise click.ClickException(
+                    f"Dash required for dashboard: {e}. Install with: pip install dash"
+                ) from e
+
+            host = "127.0.0.1"
+            port = 8050
+            verbose = False
+            i = 0
+            while i < len(argv):
+                a = argv[i]
+                if a == "--host" and i + 1 < len(argv):
+                    host = argv[i + 1]
+                    i += 2
+                    continue
+                if a == "--port" and i + 1 < len(argv):
+                    port = int(argv[i + 1])
+                    i += 2
+                    continue
+                if a in ("-v", "--verbose"):
+                    verbose = True
+                    i += 1
+                    continue
+                raise click.UsageError(f"Unknown /dashboard argument: {a}")
+
+            if session.dashboard_thread is not None and session.dashboard_thread.is_alive():
+                url = f"http://{session.dashboard_host}:{session.dashboard_port}"
+                console.print(
+                    Panel(
+                        Text(
+                            f"Dashboard thread already running — {url}\n"
+                            "Stop the REPL or use another terminal: "
+                            "catia-agent dashboard --port <other>",
+                            style="yellow",
+                        ),
+                        title="Dashboard",
+                        border_style="cyan",
+                    )
+                )
+                return True
+
+            session.dashboard_host = host
+            session.dashboard_port = port
+
+            def _run_dash() -> None:
+                run_dashboard(host=host, port=port, debug=verbose)
+
+            th = threading.Thread(
+                target=_run_dash,
+                name="catia-dashboard",
+                daemon=True,
+            )
+            session.dashboard_thread = th
+            th.start()
+            await asyncio.sleep(0.25)
+            url = f"http://{host}:{port}"
+            console.print(
+                Panel(
+                    Text.from_markup(
+                        "[bold]Dash server[/bold] started in a background thread.\n"
+                        f"Open [link={url}]{url}[/link] in a browser.\n"
+                        "[dim]API figures (if used) expect catia-agent api on :8000 unless you reconfigure.[/dim]"
+                    ),
+                    title="Dashboard",
+                    border_style="cyan",
+                )
             )
             return True
 
@@ -366,9 +459,17 @@ async def dispatch_command(
             return True
 
         if verb == "/spec":
-            if not argv:
-                raise click.UsageError("/spec requires a path to a YAML/JSON RunSpec")
-            path = argv[0]
+            if argv:
+                path = argv[0]
+            else:
+                default_spec = Path("examples/runs/baseline.yaml")
+                if default_spec.is_file():
+                    path = str(default_spec)
+                else:
+                    raise click.UsageError(
+                        "/spec needs a RunSpec path, e.g. examples/runs/baseline.yaml "
+                        f"(missing default: {default_spec})"
+                    )
             spec = load_run_spec(path)
 
             raw = await _run_blocking(
@@ -379,17 +480,19 @@ async def dispatch_command(
             )
             session.last_result = raw
             session.last_label = f"run_spec:{path}"
-            mean = raw["risk_metrics"]["descriptive_stats"]["mean"]
-            var = raw["risk_metrics"]["risk_metrics"]["var"]
-            _summary_panel(
+            rm = raw["risk_metrics"]["risk_metrics"]
+            ds = raw["risk_metrics"]["descriptive_stats"]
+            rows = [
+                ("RunSpec", path),
+                ("Mean annual loss", f"${ds['mean']:,.0f}"),
+                ("VaR (95%)", f"${rm['var']:,.0f}"),
+                ("TVaR (95%)", f"${rm['tvar']:,.0f}"),
+            ]
+            _summary_table(
                 console,
                 "Pipeline complete",
-                [
-                    f"RunSpec: {path}",
-                    f"Mean annual loss: ${mean:,.0f}",
-                    f"VaR (95%): ${var:,.0f}",
-                    "Use /json for full structured output.",
-                ],
+                rows,
+                hint="Use /json for full structured output.",
             )
             return True
 
@@ -437,15 +540,24 @@ async def dispatch_command(
                 "model_summary": result.model_summary,
             }
             session.last_label = "risk_analysis"
-            _summary_panel(
+            ms = result.model_summary
+            rows = [
+                ("Region", result.region),
+                ("Perils", ", ".join(result.perils)),
+                ("Data", "Mock" if result.use_mock_data else "Live"),
+                ("Climate rows", f"{len(result.data['climate']):,}"),
+                ("Historical events", f"{len(result.data['historical_events']):,}"),
+                (
+                    "Probability model",
+                    str(ms.get("probability_model") or "—"),
+                ),
+                ("Severity model", str(ms.get("severity_model") or "—")),
+            ]
+            _summary_table(
                 console,
-                "RiskAnalysis",
-                [
-                    f"Region: {result.region}",
-                    f"Perils: {', '.join(result.perils)}",
-                    f"Mock data: {result.use_mock_data}",
-                    f"Model: {result.model_summary}",
-                ],
+                "Risk analysis",
+                rows,
+                hint="Use /json for full structured output.",
             )
             return True
 
@@ -491,17 +603,21 @@ async def dispatch_command(
                 "scenario_id": scenario_id,
             }
             session.last_label = "actuarial_multi_peril"
-            m = out.aggregate_metrics["descriptive_stats"]["mean"]
-            v = out.aggregate_metrics["risk_metrics"]["var"]
-            _summary_panel(
+            arm = out.aggregate_metrics["risk_metrics"]
+            ads = out.aggregate_metrics["descriptive_stats"]
+            scen = scenario_id or "—"
+            rows = [
+                ("Perils", ", ".join(out.perils)),
+                ("Scenario", scen),
+                ("Mean annual loss", f"${ads['mean']:,.0f}"),
+                ("VaR (95%)", f"${arm['var']:,.0f}"),
+                ("TVaR (95%)", f"${arm['tvar']:,.0f}"),
+            ]
+            _summary_table(
                 console,
-                "ActuarialScience",
-                [
-                    f"Perils: {', '.join(out.perils)}",
-                    f"Mean annual loss: ${m:,.0f}",
-                    f"VaR (95%): ${v:,.0f}",
-                    "Use /json for more metrics.",
-                ],
+                "Actuarial simulation",
+                rows,
+                hint="Use /json for more metrics.",
             )
             return True
 
@@ -512,6 +628,7 @@ async def dispatch_command(
             scenario_id: Optional[str] = None
             iterations: Optional[int] = None
             output_dir: Optional[str] = None
+            run_artifacts: Optional[List[str]] = list(REPL_RUN_ARTIFACTS)
             i = 0
             while i < len(argv):
                 a = argv[i]
@@ -542,6 +659,14 @@ async def dispatch_command(
                     output_dir = argv[i + 1]
                     i += 2
                     continue
+                if a == "--full":
+                    run_artifacts = None
+                    i += 1
+                    continue
+                if a == "--artifacts":
+                    names, i = _repl_take_artifact_names(argv, i, a)
+                    run_artifacts = names
+                    continue
                 raise click.UsageError(f"Unknown /run argument: {a}")
 
             raw = await _run_blocking(
@@ -554,22 +679,39 @@ async def dispatch_command(
                 scenario_id=scenario_id,
                 monte_carlo_iterations=iterations,
                 output_dir=output_dir,
-                artifacts=None,
+                artifacts=run_artifacts,
             )
             session.last_result = raw
             session.last_label = "full_pipeline"
-            mean = raw["risk_metrics"]["descriptive_stats"]["mean"]
-            var = raw["risk_metrics"]["risk_metrics"]["var"]
-            _summary_panel(
+            rm = raw["risk_metrics"]["risk_metrics"]
+            ds = raw["risk_metrics"]["descriptive_stats"]
+            mc_iters = iterations or SIMULATION_CONFIG["monte_carlo_iterations"]
+            artifact_note = (
+                "all (incl. static HTML)"
+                if run_artifacts is None
+                else ", ".join(run_artifacts)
+            )
+            rows = [
+                ("Region", region),
+                ("Perils", ", ".join(perils)),
+                ("Data", "Mock" if use_mock else "Live"),
+                ("Artifacts", artifact_note),
+                ("Monte Carlo iterations", f"{mc_iters:,}"),
+                ("Mean annual loss", f"${ds['mean']:,.0f}"),
+                ("VaR (95%)", f"${rm['var']:,.0f}"),
+                ("TVaR (95%)", f"${rm['tvar']:,.0f}"),
+            ]
+            hint = "Use /json for full structured output."
+            if run_artifacts is not None:
+                hint += (
+                    " For Plotly HTML charts under outputs/, use /run --full "
+                    "or /run --artifacts dashboard (and any other artifact keys you need)."
+                )
+            _summary_table(
                 console,
                 "Full pipeline",
-                [
-                    f"Region: {region} | Perils: {', '.join(perils)}",
-                    f"Mean annual loss: ${mean:,.0f}",
-                    f"VaR (95%): ${var:,.0f}",
-                    f"(Simulation iterations this run: {iterations or SIMULATION_CONFIG['monte_carlo_iterations']})",
-                    "Use /json for full structured output.",
-                ],
+                rows,
+                hint=hint,
             )
             return True
 
