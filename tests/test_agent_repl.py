@@ -26,6 +26,13 @@ def test_interpret_natural_language_full():
     assert "US_East_Coast" in argv
 
 
+def test_interpret_natural_language_tips():
+    for phrase in ("tips", "hint", "more tips", "show tips", "give me tips"):
+        verb, argv = interpret_natural_language(phrase)
+        assert verb == "tips"
+        assert argv == []
+
+
 def test_risk_analysis_bridge_mock():
     ra = RiskAnalysis()
     out = ra.run("US_Gulf_Coast", use_mock_data=True, perils=["hurricane"])

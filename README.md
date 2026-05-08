@@ -55,7 +55,7 @@ catia --dashboard
 # http://127.0.0.1:8050 — use --dashboard-port to change port
 ```
 
-**Terminal agent (Rich + Click REPL):** optional `pip install -e ".[agent]"` (or use dev extra, which includes Click & Rich). Interactive session with `/commands`, natural-language shortcuts, `Panel` summaries, `Live` spinners for long runs, and JSON syntax highlighting (`/json`).
+**Terminal agent (Rich + Click REPL):** optional `pip install -e ".[agent]"` (or use dev extra, which includes Click & Rich). On startup you get **colorized example prompts** (Windows Terminal or any ANSI terminal); set `RICH_FORCE_COLOR=1` if colors do not show.
 
 ```bash
 catia-agent
@@ -110,6 +110,66 @@ Try `/help`, `/run --perils hurricane flood`, or plain English such as *simulate
   ```
 
 - **[Tutorial](notebooks/tutorial.ipynb)** — Step-by-step notebook
+
+---
+
+## Common issues
+
+### `catia-agent` or `catia` is not recognized (Windows PowerShell)
+
+PowerShell only runs commands that are on **`PATH`**. Console scripts are installed into your virtual environment’s **`Scripts`** folder (e.g. `C:\Users\you\Projects\CATIA\.venv\Scripts\`). If that venv is not active—or you installed without editable mode—the name won’t resolve.
+
+**Fix:**
+
+1. **Activate the venv** from the repo root (prompt should show `(venv)` or `(.venv)`):
+
+   ```powershell
+   .\.venv\Scripts\Activate.ps1
+   ```
+
+2. **Reinstall the package in editable mode** so entry points are generated:
+
+   ```powershell
+   pip install -e ".[dev]"
+   ```
+
+   The **`dev`** extra includes Click and Rich (required for `catia-agent`). You can use `pip install -e ".[agent]"` instead if you only want agent dependencies.
+
+3. **Confirm scripts exist:**
+
+   ```powershell
+   Get-Command catia-agent, catia | Format-Table Name, Source
+   ```
+
+   If `Source` is under `.venv\Scripts\`, you’re good.
+
+**Always-available fallback (no reliance on `PATH` to `Scripts`):** run the module with the same interpreter:
+
+```powershell
+python -m catia.agent_repl
+python -m catia.agent_repl run -r US_Gulf_Coast -p hurricane
+python -m catia.cli --help
+```
+
+Use `python` that belongs to your venv (after `Activate.ps1`, `python` should be the venv one).
+
+### Interactive REPL has no colors (plain text only)
+
+The REPL uses **Rich** for the welcome panel, **`catia›`** prompt, and `/help`. Use **Windows Terminal**, **VS Code integrated terminal**, or another **ANSI-capable** console. If output is unstyled, force Rich to emit color:
+
+```powershell
+$env:RICH_FORCE_COLOR = "1"
+catia-agent
+```
+
+### Agent REPL fails on `ImportError` (Click / Rich)
+
+Install extras: `pip install -e ".[dev]"` or `pip install -e ".[agent]"`.
+
+### Dashboard or API won’t start
+
+- **Dashboard:** `pip install dash` (included in the main `pyproject` dependencies for a normal install).
+- **API:** `pip install uvicorn` (listed with FastAPI in project dependencies; if you used a minimal env, install explicitly).
 
 ---
 
