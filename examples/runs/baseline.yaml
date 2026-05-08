@@ -1,0 +1,7 @@
+# Example run: defaults aligned with package DEFAULT_PERILS; explicit fields for clarity.
+region: US_Gulf_Coast
+perils:
+  - hurricane
+  - flood
+use_mock_data: true
+scenario_id: baseline

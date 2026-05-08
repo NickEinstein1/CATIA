@@ -1,0 +1,10 @@
+# Minimal artifacts: JSON report only (no dashboard HTML, compliance, or phase-1 extras).
+region: US_Gulf_Coast
+perils:
+  - hurricane
+use_mock_data: true
+monte_carlo_iterations: 2000
+artifacts:
+  - report
+
+
