@@ -1,0 +1,6 @@
+# Each non-comment line is an extended regex (grep -E). If a commit message line
+# starts with "Co-authored-by:" and matches any pattern, that line is removed.
+# Add or remove patterns to match identities you do not want recorded as co-authors.
+
+[Cc]ursoragent
+@cursor\.com

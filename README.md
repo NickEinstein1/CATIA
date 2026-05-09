@@ -40,6 +40,8 @@ conda create -n catia python=3.12 -y && conda activate catia
 pip install -e ".[dev]" -r requirements.txt
 ```
 
+**Git hooks (optional)** — After clone, from the repo root with Git Bash or another Unix-like shell, run `bash scripts/install-git-hooks.sh`. That sets `core.hooksPath` to `.githooks/`. The `prepare-commit-msg` hook removes `Co-authored-by:` lines that match patterns in `.githooks/coauthor-strip-patterns` (edit that file to suit your team).
+
 ---
 
 ## Quick Start
