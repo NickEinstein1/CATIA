@@ -1,0 +1,310 @@
+"""
+Configuration settings for CATIA system.
+Manages API endpoints, model parameters, and simulation settings.
+
+Environment-based config: place a .env file in the project root (or set env vars).
+Supported: CATIA_*, NOAA_API_TOKEN, CATIA_EXPLAIN (set to 1 to log pipeline transparency manifest). See docs transparency guide.
+"""
+
+import os
+from typing import Dict, Any
+
+# Load .env so CATIA_*, NOAA_API_TOKEN, etc. are available
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+# ============================================================================
+# API CONFIGURATION
+# ============================================================================
+
+API_CONFIG = {
+    "NOAA": {
+        "base_url": "https://www.ncei.noaa.gov/access/metadata/landing-page/bin/iso",
+        "endpoints": {
+            "climate_data": "/noaa/NOAA-NCEI-0208688",
+            "historical_events": "/noaa/NOAA-NCEI-0208688"
+        },
+        "timeout": 30,
+        "retry_attempts": 3
+    },
+    "ECMWF": {
+        "base_url": "https://api.ecmwf.int/v1",
+        "endpoints": {
+            "forecast": "/forecasts",
+            "reanalysis": "/reanalysis"
+        },
+        "timeout": 60,
+        "retry_attempts": 3
+    },
+    "WORLD_BANK": {
+        "base_url": "https://api.worldbank.org/v2",
+        "endpoints": {
+            "population": "/country",
+            "gdp": "/country"
+        },
+        "timeout": 30,
+        "retry_attempts": 3
+    }
+}
+
+# ============================================================================
+# MACHINE LEARNING MODEL CONFIGURATION
+# ============================================================================
+
+ML_CONFIG = {
+    "model_type": "RandomForest",  # RandomForest, GradientBoosting, NeuralNetwork
+    "hyperparameters": {
+        "n_estimators": 100,
+        "max_depth": 15,
+        "min_samples_split": 5,
+        "min_samples_leaf": 2,
+        "random_state": 42
+    },
+    "train_test_split": 0.8,
+    "cross_validation_folds": 5,
+    "feature_scaling": "StandardScaler",
+    "model_path": "models/risk_model.pkl",
+    "registry_path": os.environ.get("CATIA_MODEL_REGISTRY", "models/registry.json"),
+}
+
+# ============================================================================
+# ACTUARIAL SIMULATION CONFIGURATION
+# ============================================================================
+
+SIMULATION_CONFIG = {
+    "monte_carlo_iterations": 10000,
+    "confidence_level": 0.95,  # 95% for VaR/TVaR
+    "frequency_distribution": "Poisson",  # Poisson for event frequency
+    # Lognormal | Pareto | Weibull | Gamma | Spliced
+    "severity_distribution": os.environ.get("CATIA_SEVERITY_DIST", "Lognormal"),
+    "random_seed": 42,
+    "correlation_matrix_path": "data/peril_correlations.csv",
+    "n_jobs": int(os.environ.get("CATIA_N_JOBS", "-1")),  # -1 = all cores for parallel MC
+    # Spliced severity: body below threshold, tail above (e.g. Lognormal + Pareto)
+    "spliced_threshold_percentile": 90,
+}
+
+# ============================================================================
+# RISK METRICS CONFIGURATION
+# ============================================================================
+
+RISK_METRICS = {
+    "var_confidence": 0.95,  # Value-at-Risk at 95%
+    "tvar_confidence": 0.95,  # Tail Value-at-Risk at 95%
+    "return_periods": [10, 25, 50, 100, 250, 500, 1000],  # Years
+    "loss_ratio_threshold": 0.75  # For model validation
+}
+
+# ============================================================================
+# MITIGATION CONFIGURATION
+# ============================================================================
+
+MITIGATION_CONFIG = {
+    "strategies": [
+        "infrastructure_hardening",
+        "insurance_coverage",
+        "relocation",
+        "early_warning_systems",
+        "land_use_planning"
+    ],
+    "budget_constraint": 1_000_000,  # USD
+    "optimization_method": "linear_programming",  # or "genetic_algorithm"
+    "cost_benefit_discount_rate": 0.03  # 3% annual discount
+}
+
+# ============================================================================
+# PERIL CONFIGURATION
+# ============================================================================
+
+PERIL_CONFIG = {
+    "hurricane": {
+        "name": "Hurricane",
+        "description": "Tropical cyclones with sustained winds > 74 mph",
+        "frequency_base": 0.5,  # Expected events per year
+        "severity_params": {"mu": 15, "sigma": 2},  # Lognormal parameters
+        "climate_drivers": ["wind_speed", "sea_level_pressure", "humidity"],
+        "regions": ["US_Gulf_Coast", "US_East_Coast", "Caribbean", "Southeast_Asia"],
+        "seasonality": [6, 7, 8, 9, 10, 11],  # June - November
+        "magnitude_scale": "Saffir-Simpson (1-5)"
+    },
+    "flood": {
+        "name": "Flood",
+        "description": "River and flash flooding events",
+        "frequency_base": 1.2,  # More frequent than hurricanes
+        "severity_params": {"mu": 13, "sigma": 1.8},
+        "climate_drivers": ["precipitation", "humidity"],
+        "regions": ["US_Gulf_Coast", "US_Midwest", "Europe", "South_Asia"],
+        "seasonality": [3, 4, 5, 6, 7, 8, 9],  # Spring-Summer
+        "magnitude_scale": "Flood severity (1-5)"
+    },
+    "wildfire": {
+        "name": "Wildfire",
+        "description": "Uncontrolled fires in wildland areas",
+        "frequency_base": 0.8,
+        "severity_params": {"mu": 14, "sigma": 1.5},
+        "climate_drivers": ["temperature", "humidity", "wind_speed"],
+        "regions": ["US_West_Coast", "Australia", "Mediterranean", "South_America"],
+        "seasonality": [6, 7, 8, 9, 10],  # Summer-Fall (fire season)
+        "magnitude_scale": "Fire severity (1-5)"
+    },
+    "earthquake": {
+        "name": "Earthquake",
+        "description": "Seismic events causing ground shaking",
+        "frequency_base": 0.3,  # Less frequent, but higher severity
+        "severity_params": {"mu": 16, "sigma": 2.5},
+        "climate_drivers": [],  # Not climate-driven
+        "regions": ["US_West_Coast", "Japan", "Turkey", "Chile", "Indonesia"],
+        "seasonality": list(range(1, 13)),  # Year-round
+        "magnitude_scale": "Richter/Moment Magnitude (1-10)"
+    },
+    "drought": {
+        "name": "Drought",
+        "description": "Prolonged deficit in precipitation affecting water supply and agriculture",
+        "frequency_base": 0.4,
+        "severity_params": {"mu": 12, "sigma": 1.8},
+        "climate_drivers": ["temperature", "precipitation"],
+        "regions": ["US_Midwest", "US_Southwest", "Australia", "Africa", "South_Asia"],
+        "seasonality": [5, 6, 7, 8, 9],  # Warm season
+        "magnitude_scale": "Drought severity (1-5)"
+    }
+}
+
+# Default perils to analyze
+DEFAULT_PERILS = ["hurricane", "flood", "wildfire", "earthquake"]
+
+# ============================================================================
+# EXPOSURE & VULNERABILITY (CAT modeling)
+# ============================================================================
+# Intensity distribution per peril for exposure-based loss: sample intensity per event.
+# Units: hurricane=wind_speed_mph, flood=depth_ft, wildfire=index_0_100,
+#        earthquake=MMI_1_12, drought=severity_0_5.
+INTENSITY_DISTRIBUTION = {
+    "hurricane": {"dist": "weibull", "scale": 85, "shape": 2.0},   # wind speed mph
+    "flood": {"dist": "weibull", "scale": 3.0, "shape": 1.5},      # depth ft
+    "wildfire": {"dist": "weibull", "scale": 45, "shape": 2.0},   # intensity 0-100
+    "earthquake": {"dist": "weibull", "scale": 7.0, "shape": 2.5}, # MMI
+    "drought": {"dist": "weibull", "scale": 2.5, "shape": 1.8},    # severity 0-5
+}
+
+# ============================================================================
+# CLIMATE SCENARIOS (forward-looking risk)
+# ============================================================================
+# Scenario ID -> per-peril frequency and severity multipliers for stress/decades.
+# Use with get_scenario_adjustments() and run_multi_peril_analysis(..., scenario_id=...).
+CLIMATE_SCENARIOS = {
+    "baseline": {
+        "description": "No change from current assumptions",
+        "peril_adjustments": {},  # identity
+    },
+    "RCP4.5_mid": {
+        "description": "RCP4.5 mid-century; moderate increase in hazard",
+        "peril_adjustments": {
+            "hurricane": {"frequency_multiplier": 1.15, "severity_multiplier": 1.1},
+            "flood": {"frequency_multiplier": 1.2, "severity_multiplier": 1.15},
+            "wildfire": {"frequency_multiplier": 1.25, "severity_multiplier": 1.1},
+            "drought": {"frequency_multiplier": 1.2, "severity_multiplier": 1.1},
+        },
+    },
+    "SSP2_2050": {
+        "description": "SSP2 circa 2050; moderate emissions, moderate hazard shift",
+        "peril_adjustments": {
+            "hurricane": {"frequency_multiplier": 1.2, "severity_multiplier": 1.15},
+            "flood": {"frequency_multiplier": 1.25, "severity_multiplier": 1.2},
+            "wildfire": {"frequency_multiplier": 1.3, "severity_multiplier": 1.15},
+            "drought": {"frequency_multiplier": 1.25, "severity_multiplier": 1.15},
+        },
+    },
+    "high_stress": {
+        "description": "High stress (e.g. Solvency II or severe scenario)",
+        "peril_adjustments": {
+            "hurricane": {"frequency_multiplier": 1.5, "severity_multiplier": 1.3},
+            "flood": {"frequency_multiplier": 1.5, "severity_multiplier": 1.3},
+            "wildfire": {"frequency_multiplier": 1.5, "severity_multiplier": 1.3},
+            "earthquake": {"frequency_multiplier": 1.0, "severity_multiplier": 1.2},
+            "drought": {"frequency_multiplier": 1.4, "severity_multiplier": 1.2},
+        },
+    },
+}
+
+# ============================================================================
+# DATA CONFIGURATION
+# ============================================================================
+
+DATA_CONFIG = {
+    "mock_data_enabled": True,  # Set to False for real API calls
+    "mock_data_path": "data/",
+    "cache_dir": os.environ.get("CATIA_CACHE_DIR", "data/cache"),
+    "cache_ttl_seconds": int(os.environ.get("CATIA_CACHE_TTL", "86400")),  # 24h default
+    "climate_variables": [
+        "temperature",
+        "precipitation",
+        "wind_speed",
+        "sea_level_pressure",
+        "humidity"
+    ],
+    "socioeconomic_variables": [
+        "population_density",
+        "gdp_per_capita",
+        "infrastructure_index",
+        "poverty_rate"
+    ],
+    "data_validation": {
+        "check_missing_values": True,
+        "check_outliers": True,
+        "outlier_threshold": 3.0  # Standard deviations
+    }
+}
+
+# ============================================================================
+# LOGGING CONFIGURATION
+# ============================================================================
+
+LOGGING_CONFIG = {
+    "level": os.environ.get("CATIA_LOG_LEVEL", "INFO"),
+    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    "log_file": "logs/catia.log",
+    "structured": os.environ.get("CATIA_STRUCTURED_LOGS", "").lower() in ("1", "true", "yes"),
+}
+
+# ============================================================================
+# OUTPUT CONFIGURATION
+# ============================================================================
+
+OUTPUT_CONFIG = {
+    "output_dir": "outputs/",
+    "jobs_dir": os.environ.get("CATIA_JOBS_DIR", "outputs/jobs"),  # Persistent job store
+    "report_format": "json",  # json, csv, html
+    "visualization_format": "html",  # html, png, pdf
+    "save_intermediate_results": True
+}
+
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+def get_config(section: str) -> Dict[str, Any]:
+    """Retrieve configuration for a specific section."""
+    config_map = {
+        "api": API_CONFIG,
+        "ml": ML_CONFIG,
+        "simulation": SIMULATION_CONFIG,
+        "risk_metrics": RISK_METRICS,
+        "mitigation": MITIGATION_CONFIG,
+        "data": DATA_CONFIG,
+        "logging": LOGGING_CONFIG,
+        "output": OUTPUT_CONFIG,
+        "peril": PERIL_CONFIG
+    }
+    return config_map.get(section, {})
+
+def get_peril_config(peril_type: str) -> Dict[str, Any]:
+    """Retrieve configuration for a specific peril type."""
+    return PERIL_CONFIG.get(peril_type, {})
+
+def set_mock_data_mode(enabled: bool):
+    """Toggle mock data mode for development."""
+    DATA_CONFIG["mock_data_enabled"] = enabled
+

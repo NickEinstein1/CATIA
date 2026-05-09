@@ -1,0 +1,36 @@
+# CATIA — optional Redis-backed live feed cache and dashboard stack.
+#
+# Usage:
+#   docker compose up dashboard
+#   open http://127.0.0.1:8050
+#
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - catia-redis-data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  dashboard:
+    build: .
+    command: ["python", "-m", "catia.dashboard"]
+    ports:
+      - "8050:8050"
+    environment:
+      CATIA_REDIS_URL: redis://redis:6379/0
+      CATIA_LIVE_REFRESH_MS: "120000"
+    volumes:
+      - ./outputs:/app/outputs
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  catia-redis-data:

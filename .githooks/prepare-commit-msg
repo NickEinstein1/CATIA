@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Strips selected Co-authored-by trailers before the commit message is finalized.
+set -euo pipefail
+
+msg_file="${1:-}"
+[[ -n "$msg_file" && -f "$msg_file" ]] || exit 0
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+patterns="$here/coauthor-strip-patterns"
+[[ -f "$patterns" ]] || exit 0
+
+strip_list="$(mktemp)"
+filtered="$(mktemp)"
+trap 'rm -f "$strip_list" "$filtered"' EXIT
+
+grep -v '^[[:space:]]*\(#\|$\)' "$patterns" >"$strip_list" || true
+[[ -s "$strip_list" ]] || exit 0
+
+while IFS= read -r line || [[ -n "$line" ]]; do
+  if [[ "$line" == Co-authored-by:* ]]; then
+    if grep -qEf "$strip_list" <<<"$line"; then
+      continue
+    fi
+  fi
+  printf '%s\n' "$line" >>"$filtered"
+done <"$msg_file"
+
+mv "$filtered" "$msg_file"
