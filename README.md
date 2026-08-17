@@ -8,7 +8,7 @@
 
 - **End-to-end** — Ingest climate data, train risk models, run Monte Carlo simulations, and optimize mitigation in one pipeline.
 - **Actuarially rigorous** — Frequency–severity models, VaR/TVaR, return periods, EVT tail modeling, and copula-based multi-peril correlation.
-- **Explainable & auditable** — Optional SHAP feature importance, compliance reports (CAS/SOA/NAIC), run IDs, and config snapshots.
+- **Explainable & auditable** — Optional SHAP feature importance, compliance reports (CAS/SOA/NAIC/IFoA), run IDs, and config snapshots.
 - **Production-ready** — REST API with health checks, rate limiting, async jobs, structured errors, and observability.
 
 ---
@@ -213,4 +213,4 @@ pytest tests/ -v --tb=short
 
 ## Compliance
 
-Designed for alignment with **CAS** catastrophe modeling guidelines, **SOA** risk management frameworks, and **NAIC** model act requirements for insurance applications.
+Designed for alignment with **CAS** catastrophe modeling guidelines, **SOA** risk management frameworks, **NAIC** model act requirements for insurance applications, and **IFoA** (Institute and Faculty of Actuaries) Standards for actuarial practice and professionalism.
