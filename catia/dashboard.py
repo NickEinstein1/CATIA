@@ -19,6 +19,7 @@ import json
 import logging
 import os
 import urllib.parse
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -467,6 +468,119 @@ def _peril_legend_row() -> html.Div:
     return html.Div(className="catia-legend", children=items)
 
 
+def _weather_command_header(output_dir: Path) -> html.Header:
+    """Atmospheric-operations masthead shared by every dashboard view."""
+    utc_now = datetime.now(timezone.utc).strftime("%H:%M UTC")
+    return html.Header(
+        className="wx-command-header",
+        children=[
+            html.Div(
+                className="wx-command-header__copy",
+                children=[
+                    html.Div(
+                        className="wx-brand-row",
+                        children=[
+                            html.Div(
+                                className="wx-brand-mark",
+                                **{"aria-hidden": "true"},
+                                children=[
+                                    html.Span(className="wx-brand-mark__orbit"),
+                                    html.Span(className="wx-brand-mark__core"),
+                                ],
+                            ),
+                            html.Div(
+                                children=[
+                                    html.P(
+                                        "CATIA / ATMOSPHERIC INTELLIGENCE",
+                                        className="wx-eyebrow",
+                                    ),
+                                    html.H1(
+                                        [
+                                            "Global Hazard",
+                                            html.Br(),
+                                            html.Span("Command System"),
+                                        ]
+                                    ),
+                                ]
+                            ),
+                        ],
+                    ),
+                    html.P(
+                        "A live decision surface for catastrophe signals, modeled risk, "
+                        "and regional exposure—ranked by the CATIA intelligence layer.",
+                        className="wx-command-header__lede",
+                    ),
+                    html.Div(
+                        className="wx-network-strip",
+                        children=[
+                            html.Span(
+                                [
+                                    html.I(className="wx-status-dot wx-status-dot--live"),
+                                    "LIVE OBSERVATION NETWORK",
+                                ],
+                                className="wx-network-strip__live",
+                            ),
+                            html.Span("USGS", className="wx-source-token"),
+                            html.Span("NASA EONET", className="wx-source-token"),
+                            html.Span("GDACS", className="wx-source-token"),
+                            html.Span("BUILD 2.5.0", className="wx-source-token"),
+                        ],
+                    ),
+                ],
+            ),
+            html.Div(
+                className="wx-radar-console",
+                **{"aria-label": "CATIA system status"},
+                children=[
+                    html.Div(
+                        className="wx-radar",
+                        **{"aria-hidden": "true"},
+                        children=[
+                            html.Span(className="wx-radar__ring wx-radar__ring--one"),
+                            html.Span(className="wx-radar__ring wx-radar__ring--two"),
+                            html.Span(className="wx-radar__ring wx-radar__ring--three"),
+                            html.Span(className="wx-radar__crosshair"),
+                            html.Span(className="wx-radar__sweep"),
+                            html.Span(className="wx-radar__ping wx-radar__ping--one"),
+                            html.Span(className="wx-radar__ping wx-radar__ping--two"),
+                            html.Span(className="wx-radar__ping wx-radar__ping--three"),
+                        ],
+                    ),
+                    html.Div(
+                        className="wx-console-meta",
+                        children=[
+                            html.Div(
+                                [
+                                    html.Span("SYSTEM", className="wx-console-meta__label"),
+                                    html.Strong("NOMINAL"),
+                                ]
+                            ),
+                            html.Div(
+                                [
+                                    html.Span("UTC", className="wx-console-meta__label"),
+                                    html.Strong(utc_now),
+                                ]
+                            ),
+                            html.Div(
+                                [
+                                    html.Span("BUILD", className="wx-console-meta__label"),
+                                    html.Strong("2.5.0"),
+                                ]
+                            ),
+                            html.Div(
+                                [
+                                    html.Span("DATA", className="wx-console-meta__label"),
+                                    html.Strong(output_dir.name.upper()),
+                                ]
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        ],
+    )
+
+
 def create_dash_app(
     output_dir: Optional[str] = None,
     *,
@@ -478,7 +592,7 @@ def create_dash_app(
 
     app = Dash(
         __name__,
-        title="CATIA · Global command",
+        title="CATIA · Global command · 2.5.0",
         suppress_callback_exceptions=True,
         assets_folder=str(_ASSETS_DIR),
     )
@@ -489,15 +603,13 @@ def create_dash_app(
         className="catia-future-root",
         children=[
             dcc.Location(id="url", refresh=False),
+            html.Div(className="wx-ambient-grid", **{"aria-hidden": "true"}),
+            _weather_command_header(out),
             html.Div(
-                className="catia-hero",
+                className="wx-section-label",
                 children=[
-                    html.H1("CATIA"),
-                    html.P("Catastrophe AI · Global hazard intelligence", className="sub"),
-                    html.Div(
-                        className="badge",
-                        children=f"BUILD {__version__} · OUTPUT {out.name}/",
-                    ),
+                    html.Span("COMMAND MODULES"),
+                    html.Span("Select an intelligence surface", className="wx-section-label__hint"),
                 ],
             ),
             dcc.Tabs(
@@ -510,16 +622,15 @@ def create_dash_app(
                     "background": "rgba(15,23,42,0.5)",
                 },
                 children=[
-                    dcc.Tab(label="Global view", value="tab-globe"),
-                    dcc.Tab(label="Live Earth", value="tab-live"),
-                    dcc.Tab(label="Overview", value="tab-overview"),
-                    dcc.Tab(label="Latest run", value="tab-run"),
-                    dcc.Tab(label="Charts", value="tab-charts"),
-                    dcc.Tab(label="Perils & scenarios", value="tab-perils"),
-                    dcc.Tab(label="Assumptions", value="tab-assumptions"),
-                    dcc.Tab(label="API & files", value="tab-api"),
+                    dcc.Tab(label="01  Global", value="tab-globe"),
+                    dcc.Tab(label="02  Live Earth", value="tab-live"),
+                    dcc.Tab(label="03  Overview", value="tab-overview"),
+                    dcc.Tab(label="04  Latest Run", value="tab-run"),
+                    dcc.Tab(label="05  Analytics", value="tab-charts"),
+                    dcc.Tab(label="06  Scenarios", value="tab-perils"),
+                    dcc.Tab(label="07  Assumptions", value="tab-assumptions"),
+                    dcc.Tab(label="08  System", value="tab-api"),
                 ],
-                style={"marginTop": "20px"},
             ),
             html.Div(
                 id="live-toolbar",

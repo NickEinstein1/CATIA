@@ -17,6 +17,19 @@ from typing import Any, Dict, List, Optional, Tuple
 from catia.geo_hazards import PERIL_VIS_COLORS
 from catia.live_catastrophe_feeds import category_color
 
+# Imported at module load: Dash rejects component libraries first imported
+# inside a callback (ImportedInsideCallbackError).
+try:
+    from deckgl_dash import DeckGL
+    from deckgl_dash.layers import GeoJsonLayer, ScatterplotLayer
+    from deckgl_dash.maplibre import MapLibreConfig, MapLibreStyle
+except ImportError:  # optional dependency
+    DeckGL = None
+    GeoJsonLayer = None
+    ScatterplotLayer = None
+    MapLibreConfig = None
+    MapLibreStyle = None
+
 
 def _hex_to_rgba(hex_color: str, alpha: int = 210) -> Tuple[int, int, int, int]:
     h = hex_color.strip().lstrip("#")
@@ -45,9 +58,7 @@ def _radius_meters(score: float) -> float:
 
 
 def _resolve_maplibre_style():
-    try:
-        from deckgl_dash.maplibre import MapLibreStyle
-    except ImportError:
+    if MapLibreStyle is None:
         return None
     name = os.environ.get("CATIA_DECK_MAP_STYLE", "CARTO_DARK_MATTER").strip().upper()
     return getattr(MapLibreStyle, name, MapLibreStyle.CARTO_DARK_MATTER)
@@ -64,11 +75,7 @@ def build_live_deck_earth_map(
 
     Returns ``None`` if ``deckgl-dash`` is not installed or initialization fails.
     """
-    try:
-        from deckgl_dash import DeckGL
-        from deckgl_dash.layers import GeoJsonLayer, ScatterplotLayer
-        from deckgl_dash.maplibre import MapLibreConfig
-    except ImportError:
+    if DeckGL is None:
         return None
 
     style_token = _resolve_maplibre_style()

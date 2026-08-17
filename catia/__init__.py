@@ -41,7 +41,7 @@ Example:
     >>> print(f"EVT VaR (95%): ${results['aggregate_metrics']['evt']['gpd_var_95']:,.0f}")
 """
 
-__version__ = "1.7.0"  # Updated for backtesting framework
+__version__ = "2.5.0"  # Build 2.5 — weather command dashboard + live intelligence
 __author__ = "CATIA Development Team"
 __all__ = [
     "audit",

@@ -1,15 +1,15 @@
 """
 OpenStreetMap integration for CATIA (dashboard maps).
 
-Uses standard **raster map tiles** from the OpenStreetMap community tile server
-for a 2D slippy map. See https://www.openstreetmap.org/copyright for license
-and attribution.
+Default basemap: **CARTO Dark Matter** raster tiles (aligned with Deck.gl), with
+OpenStreetMap + CARTO attribution. Override via ``CATIA_OSM_TILE_URL``.
+See https://www.openstreetmap.org/copyright and CARTO attribution requirements.
 
 Notes:
 
-- Tiles are for **visualization** only; follow OSMF tile usage policy for
-  production (cache, no bulk scraping from the app server — browser fetches are
-  typical for dashboards).
+- Tiles are for **visualization** only; follow each provider's tile usage policy
+  for production (cache, no bulk scraping from the app server — browser fetches
+  are typical for dashboards).
 - **Vector / building data** from OSM (Overpass API, geofabrik extracts) can be
   layered later for exposure-grade workflows; this module focuses on the basemap
   + CATIA hazard markers.
@@ -26,12 +26,24 @@ from catia.geo_hazards import PERIL_VIS_COLORS, aggregate_region_incidents
 from catia.geo_regions import REGION_CENTROIDS
 from catia.live_catastrophe_feeds import category_color
 
-# OSM standard raster tile URL pattern (browser requests tiles).
-OSM_TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+# Imported at module load: Dash rejects component libraries first imported
+# inside a callback (ImportedInsideCallbackError).
+try:
+    import dash_leaflet as dl
+except ImportError:  # optional dependency
+    dl = None
 
-# Required attribution for OSM tiles.
+# Dark basemap aligned with Deck.gl ``CARTO_DARK_MATTER`` (browser requests tiles).
+# Override with ``CATIA_OSM_TILE_URL`` if needed.
+OSM_TILE_URL = os.environ.get(
+    "CATIA_OSM_TILE_URL",
+    "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+)
+
+# Attribution for CARTO dark tiles (must retain OSM credit).
 OSM_ATTRIBUTION_HTML = (
     '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    ' · &copy; <a href="https://carto.com/attributions">CARTO</a>'
 )
 
 
@@ -48,9 +60,7 @@ def build_osm_leaflet_map(
     Returns a ``dash_leaflet.Map`` instance, or ``None`` if ``dash_leaflet`` is
     not installed.
     """
-    try:
-        import dash_leaflet as dl
-    except ImportError:
+    if dl is None:
         return None
 
     incidents = aggregate_region_incidents(report)
@@ -124,9 +134,7 @@ def build_osm_live_catastrophe_map(
     markers are wrapped in ``MarkerClusterGroup`` for dense views. Falls back to a
     flat layer if clustering is unavailable.
     """
-    try:
-        import dash_leaflet as dl
-    except ImportError:
+    if dl is None:
         return None
 
     if cluster_markers is None:

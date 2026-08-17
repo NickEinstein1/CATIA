@@ -718,3 +718,788 @@ textarea:focus-visible,
 ._dash-undo-redo {
   display: none;
 }
+
+/* ==========================================================================
+   CATIA Weather Command System — 2026 visual layer
+   ========================================================================== */
+
+:root {
+  --wx-void: #02060b;
+  --wx-night: #07111c;
+  --wx-surface: rgba(8, 23, 36, 0.78);
+  --wx-surface-raised: rgba(10, 29, 45, 0.9);
+  --wx-line: rgba(118, 193, 224, 0.16);
+  --wx-line-hot: rgba(84, 217, 255, 0.42);
+  --wx-cyan: #60ddff;
+  --wx-cyan-soft: #a7efff;
+  --wx-mint: #54f2c2;
+  --wx-amber: #ffc857;
+  --wx-red: #ff6b72;
+  --wx-violet: #ad8cff;
+  --wx-text: #edfaff;
+  --wx-muted: #87a9b8;
+  --wx-dim: #4f7180;
+  --wx-radius: 18px;
+  --wx-shadow: 0 26px 80px rgba(0, 0, 0, 0.32);
+  --catia-bg-deep: var(--wx-void);
+  --catia-bg-panel: var(--wx-surface);
+  --catia-border: var(--wx-line);
+  --catia-glow: rgba(96, 221, 255, 0.42);
+  --catia-text: var(--wx-text);
+  --catia-muted: var(--wx-muted);
+  --catia-accent: var(--wx-cyan);
+  --catia-accent-2: var(--wx-violet);
+}
+
+html {
+  background: var(--wx-void);
+}
+
+body {
+  margin: 0;
+  background-color: var(--wx-void) !important;
+  background-image:
+    radial-gradient(circle at 12% -10%, rgba(49, 143, 176, 0.18), transparent 34%),
+    radial-gradient(circle at 96% 5%, rgba(41, 89, 139, 0.14), transparent 31%),
+    linear-gradient(160deg, #02060b 0%, #06101a 48%, #02070d 100%) !important;
+  color: var(--wx-text) !important;
+  font-family: Inter, "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+}
+
+body::before {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  content: "";
+  pointer-events: none;
+  opacity: 0.55;
+  background-image:
+    linear-gradient(rgba(94, 200, 235, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(94, 200, 235, 0.025) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: linear-gradient(to bottom, black, transparent 88%);
+}
+
+.catia-future-root {
+  position: relative;
+  isolation: isolate;
+  width: min(1600px, calc(100% - 32px));
+  max-width: none;
+  box-sizing: border-box;
+  margin: 0 auto;
+  padding: 20px 0 64px;
+  font-family: Inter, "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+}
+
+.wx-ambient-grid {
+  position: fixed;
+  z-index: -1;
+  top: 60px;
+  left: 50%;
+  width: min(1500px, 94vw);
+  height: 620px;
+  pointer-events: none;
+  transform: translateX(-50%);
+  opacity: 0.42;
+  background:
+    radial-gradient(circle at center, rgba(73, 208, 255, 0.08), transparent 52%),
+    repeating-radial-gradient(
+      circle at 76% 21%,
+      transparent 0,
+      transparent 78px,
+      rgba(96, 221, 255, 0.035) 79px,
+      transparent 80px
+    );
+}
+
+.wx-command-header {
+  position: relative;
+  display: grid;
+  overflow: hidden;
+  grid-template-columns: minmax(0, 1.25fr) minmax(360px, 0.75fr);
+  gap: clamp(28px, 5vw, 84px);
+  min-height: 350px;
+  padding: clamp(30px, 5vw, 68px);
+  border: 1px solid var(--wx-line);
+  border-radius: 26px;
+  background:
+    linear-gradient(118deg, rgba(6, 20, 31, 0.97), rgba(7, 27, 42, 0.88)),
+    var(--wx-surface);
+  box-shadow: var(--wx-shadow), inset 0 1px rgba(255, 255, 255, 0.055);
+}
+
+.wx-command-header::before {
+  position: absolute;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, transparent 0 49.9%, rgba(96, 221, 255, 0.035) 50%, transparent 50.1%),
+    linear-gradient(0deg, transparent 0 49.9%, rgba(96, 221, 255, 0.035) 50%, transparent 50.1%);
+  background-size: 80px 80px;
+  mask-image: linear-gradient(90deg, transparent, black 66%);
+}
+
+.wx-command-header::after {
+  position: absolute;
+  right: -12%;
+  bottom: -68%;
+  width: 680px;
+  aspect-ratio: 1;
+  border: 1px solid rgba(96, 221, 255, 0.06);
+  border-radius: 50%;
+  content: "";
+  box-shadow:
+    0 0 0 90px rgba(96, 221, 255, 0.025),
+    0 0 0 180px rgba(96, 221, 255, 0.016);
+}
+
+.wx-command-header__copy,
+.wx-radar-console {
+  position: relative;
+  z-index: 1;
+}
+
+.wx-command-header__copy {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.wx-brand-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 22px;
+}
+
+.wx-brand-mark {
+  position: relative;
+  flex: 0 0 auto;
+  width: 58px;
+  height: 58px;
+  margin-top: 4px;
+  border: 1px solid rgba(96, 221, 255, 0.35);
+  border-radius: 50%;
+  box-shadow: inset 0 0 24px rgba(96, 221, 255, 0.08), 0 0 34px rgba(96, 221, 255, 0.1);
+}
+
+.wx-brand-mark::before,
+.wx-brand-mark::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  content: "";
+  background: rgba(96, 221, 255, 0.28);
+  transform: translate(-50%, -50%);
+}
+
+.wx-brand-mark::before {
+  width: 42px;
+  height: 1px;
+}
+
+.wx-brand-mark::after {
+  width: 1px;
+  height: 42px;
+}
+
+.wx-brand-mark__orbit {
+  position: absolute;
+  inset: 8px;
+  border: 1px dashed rgba(96, 221, 255, 0.36);
+  border-radius: 50%;
+  animation: wx-spin 14s linear infinite;
+}
+
+.wx-brand-mark__core {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--wx-cyan);
+  box-shadow: 0 0 18px var(--wx-cyan);
+  transform: translate(-50%, -50%);
+}
+
+.wx-eyebrow {
+  margin: 0 0 12px;
+  color: var(--wx-cyan);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.18em;
+}
+
+.wx-command-header h1 {
+  margin: 0;
+  color: var(--wx-text);
+  font-size: clamp(2.45rem, 5vw, 5.35rem);
+  font-weight: 420;
+  letter-spacing: -0.055em;
+  line-height: 0.94;
+}
+
+.wx-command-header h1 span {
+  color: var(--wx-cyan-soft);
+  font-weight: 620;
+}
+
+.wx-command-header__lede {
+  max-width: 720px;
+  margin: 28px 0 24px 80px;
+  color: var(--wx-muted);
+  font-size: clamp(0.94rem, 1.4vw, 1.08rem);
+  line-height: 1.7;
+}
+
+.wx-network-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+  margin-left: 80px;
+}
+
+.wx-network-strip__live,
+.wx-source-token {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  box-sizing: border-box;
+  padding: 5px 10px;
+  border: 1px solid var(--wx-line);
+  border-radius: 999px;
+  color: var(--wx-dim);
+  background: rgba(4, 13, 21, 0.56);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.64rem;
+  letter-spacing: 0.08em;
+}
+
+.wx-network-strip__live {
+  border-color: rgba(84, 242, 194, 0.3);
+  color: var(--wx-mint);
+}
+
+.wx-status-dot {
+  width: 6px;
+  height: 6px;
+  margin-right: 7px;
+  border-radius: 50%;
+}
+
+.wx-status-dot--live {
+  background: var(--wx-mint);
+  box-shadow: 0 0 12px var(--wx-mint);
+  animation: wx-pulse 2.2s ease-out infinite;
+}
+
+.wx-radar-console {
+  display: grid;
+  place-items: center;
+  align-content: center;
+}
+
+.wx-radar {
+  position: relative;
+  width: min(300px, 28vw);
+  min-width: 230px;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 1px solid rgba(96, 221, 255, 0.24);
+  border-radius: 50%;
+  background:
+    conic-gradient(from 245deg, transparent 0deg, rgba(96, 221, 255, 0.16) 31deg, transparent 64deg),
+    radial-gradient(circle, rgba(96, 221, 255, 0.07), rgba(3, 12, 20, 0.34) 62%);
+  box-shadow:
+    inset 0 0 60px rgba(96, 221, 255, 0.07),
+    0 0 70px rgba(96, 221, 255, 0.08);
+}
+
+.wx-radar__ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  border: 1px solid rgba(96, 221, 255, 0.14);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.wx-radar__ring--one { width: 34%; height: 34%; }
+.wx-radar__ring--two { width: 66%; height: 66%; }
+.wx-radar__ring--three { width: calc(100% - 2px); height: calc(100% - 2px); }
+
+.wx-radar__crosshair::before,
+.wx-radar__crosshair::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  content: "";
+  background: rgba(96, 221, 255, 0.12);
+  transform: translate(-50%, -50%);
+}
+
+.wx-radar__crosshair::before { width: 100%; height: 1px; }
+.wx-radar__crosshair::after { width: 1px; height: 100%; }
+
+.wx-radar__sweep {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    transparent 314deg,
+    rgba(96, 221, 255, 0.22) 342deg,
+    rgba(96, 221, 255, 0.55) 358deg,
+    transparent 360deg
+  );
+  animation: wx-spin 5.8s linear infinite;
+}
+
+.wx-radar__ping {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border: 1px solid rgba(255, 200, 87, 0.8);
+  border-radius: 50%;
+  background: var(--wx-amber);
+  box-shadow: 0 0 14px var(--wx-amber);
+}
+
+.wx-radar__ping--one { top: 26%; left: 61%; }
+.wx-radar__ping--two { top: 59%; left: 31%; animation: wx-blink 2.6s ease-in-out infinite; }
+.wx-radar__ping--three { top: 70%; left: 68%; animation: wx-blink 3.4s 0.7s ease-in-out infinite; }
+
+.wx-console-meta {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  width: min(420px, 100%);
+  margin-top: 22px;
+  overflow: hidden;
+  border: 1px solid var(--wx-line);
+  border-radius: 10px;
+  background: var(--wx-line);
+}
+
+.wx-console-meta > div {
+  display: flex;
+  min-width: 0;
+  padding: 10px 9px;
+  flex-direction: column;
+  gap: 4px;
+  background: rgba(3, 14, 23, 0.94);
+  text-align: center;
+}
+
+.wx-console-meta__label {
+  color: var(--wx-dim);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.56rem;
+  letter-spacing: 0.11em;
+}
+
+.wx-console-meta strong {
+  overflow: hidden;
+  color: var(--wx-cyan-soft);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.66rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wx-section-label {
+  display: flex;
+  justify-content: space-between;
+  margin: 28px 2px 10px;
+  color: var(--wx-cyan);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+}
+
+.wx-section-label__hint {
+  color: var(--wx-dim);
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: none;
+}
+
+/* Navigation becomes a compact instrument rail. */
+.catia-tabs {
+  display: flex !important;
+  gap: 6px;
+  box-sizing: border-box;
+  padding: 7px !important;
+  overflow-x: auto;
+  border: 1px solid var(--wx-line);
+  border-radius: 14px;
+  background: rgba(4, 14, 23, 0.78);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.025);
+}
+
+.catia-tabs .tab {
+  flex: 1 0 auto !important;
+  min-width: max-content;
+  padding: 12px 16px !important;
+  margin: 0 !important;
+  border: 1px solid transparent !important;
+  border-radius: 9px !important;
+  background: transparent !important;
+  color: var(--wx-muted) !important;
+  font-family: "SFMono-Regular", Consolas, monospace !important;
+  font-size: 0.68rem !important;
+  font-weight: 560 !important;
+  letter-spacing: 0.045em;
+  transition: color 160ms ease, background 160ms ease, border-color 160ms ease;
+}
+
+.catia-tabs .tab:hover {
+  color: var(--wx-text) !important;
+  background: rgba(96, 221, 255, 0.045) !important;
+}
+
+.catia-tabs .tab--selected {
+  border-color: rgba(96, 221, 255, 0.3) !important;
+  background: linear-gradient(180deg, rgba(96, 221, 255, 0.13), rgba(96, 221, 255, 0.055)) !important;
+  color: var(--wx-cyan-soft) !important;
+  box-shadow: inset 0 0 16px rgba(96, 221, 255, 0.05), 0 0 20px rgba(96, 221, 255, 0.055);
+}
+
+/* Universal weather-instrument surfaces. */
+.catia-panel,
+.catia-live-toolbar,
+.catia-kpi-card,
+.catia-compliance {
+  border-color: var(--wx-line);
+  background:
+    linear-gradient(145deg, rgba(11, 30, 45, 0.87), rgba(5, 18, 29, 0.8));
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.035), 0 18px 44px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(18px);
+}
+
+.catia-panel {
+  position: relative;
+  overflow: hidden;
+  padding: 22px;
+  border-radius: var(--wx-radius);
+}
+
+.catia-panel::before {
+  position: absolute;
+  top: 0;
+  left: 22px;
+  width: 44px;
+  height: 1px;
+  content: "";
+  background: var(--wx-cyan);
+  box-shadow: 0 0 12px var(--wx-cyan);
+}
+
+.catia-panel h3,
+.catia-section-head__title {
+  color: var(--wx-text);
+  font-weight: 560;
+  letter-spacing: -0.015em;
+}
+
+.catia-section-head__sub,
+.catia-footnote,
+.globe-caption {
+  color: var(--wx-muted);
+  line-height: 1.55;
+}
+
+.catia-kpi-grid {
+  gap: 10px;
+}
+
+.catia-kpi-card {
+  position: relative;
+  min-height: 108px;
+  box-sizing: border-box;
+  padding: 18px;
+  border-radius: 14px;
+}
+
+.catia-kpi-card::after {
+  position: absolute;
+  right: 14px;
+  bottom: 13px;
+  width: 24px;
+  height: 9px;
+  border-right: 1px solid rgba(96, 221, 255, 0.18);
+  border-bottom: 1px solid rgba(96, 221, 255, 0.18);
+  content: "";
+}
+
+.catia-kpi-card__label,
+.catia-live-toolbar__label {
+  color: var(--wx-dim);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+}
+
+.catia-kpi-card__value {
+  color: var(--wx-text);
+  font-size: 2rem;
+  font-weight: 520;
+  letter-spacing: -0.04em;
+}
+
+.catia-live-toolbar {
+  margin-top: 10px !important;
+  padding: 18px 20px;
+  border-radius: var(--wx-radius);
+}
+
+.catia-live-toolbar__title {
+  color: var(--wx-text);
+  font-size: 0.98rem;
+  font-weight: 560;
+}
+
+.catia-dash-dropdown .Select-control {
+  min-height: 40px;
+  border-color: var(--wx-line) !important;
+  border-radius: 9px !important;
+  background: rgba(2, 10, 17, 0.76) !important;
+}
+
+.catia-btn,
+.catia-upload-zone,
+.catia-clipboard button {
+  min-height: 38px;
+  box-sizing: border-box;
+  border-color: var(--wx-line-hot);
+  border-radius: 9px;
+  background: rgba(5, 19, 30, 0.86);
+  color: var(--wx-cyan-soft);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.66rem;
+  letter-spacing: 0.055em;
+}
+
+.catia-live-health {
+  border-color: var(--wx-line);
+  border-radius: 12px;
+  background: rgba(3, 14, 23, 0.74);
+  font-family: "SFMono-Regular", Consolas, monospace;
+}
+
+.catia-health-pill {
+  padding: 4px 9px;
+  border-color: var(--wx-line);
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.catia-health-pill--ok {
+  border-color: rgba(84, 242, 194, 0.3);
+  color: var(--wx-mint);
+}
+
+.catia-score-pill {
+  border-color: rgba(96, 221, 255, 0.3);
+  background: rgba(96, 221, 255, 0.08);
+  color: var(--wx-cyan-soft);
+  font-family: "SFMono-Regular", Consolas, monospace;
+}
+
+.catia-score-pill--high {
+  border-color: rgba(255, 200, 87, 0.4);
+  background: rgba(255, 200, 87, 0.11);
+  color: var(--wx-amber);
+}
+
+.catia-table th {
+  color: var(--wx-cyan-soft);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.64rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.catia-table__row td {
+  border-color: rgba(118, 193, 224, 0.09);
+  color: var(--wx-muted);
+}
+
+.catia-table tbody tr.catia-table__row:nth-child(even) td {
+  background: rgba(96, 221, 255, 0.018);
+}
+
+.catia-table tbody tr.catia-table__row:hover td {
+  background: rgba(96, 221, 255, 0.045);
+  color: var(--wx-text);
+}
+
+.catia-chip {
+  border-color: var(--wx-line);
+  background: rgba(96, 221, 255, 0.045);
+  color: var(--wx-muted);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.66rem;
+}
+
+.catia-legend {
+  padding: 12px 14px;
+  border: 1px solid var(--wx-line);
+  border-radius: 12px;
+  background: rgba(3, 14, 23, 0.58);
+}
+
+.catia-legend-item {
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.66rem;
+}
+
+.catia-legend-dot {
+  width: 8px;
+  height: 8px;
+}
+
+.catia-flash {
+  border-radius: 12px;
+  backdrop-filter: blur(14px);
+}
+
+.catia-flash--info {
+  border-color: rgba(96, 221, 255, 0.3);
+  background: rgba(35, 135, 166, 0.1);
+}
+
+.catia-panel--deck {
+  border-color: rgba(173, 140, 255, 0.3);
+  box-shadow: 0 22px 60px rgba(47, 24, 104, 0.12), inset 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.catia-page-loading {
+  min-height: 160px;
+}
+
+@keyframes wx-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes wx-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(84, 242, 194, 0.6); }
+  70% { box-shadow: 0 0 0 7px rgba(84, 242, 194, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(84, 242, 194, 0); }
+}
+
+@keyframes wx-blink {
+  0%, 100% { opacity: 0.4; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.25); }
+}
+
+@media (max-width: 1050px) {
+  .wx-command-header {
+    grid-template-columns: 1fr;
+  }
+
+  .wx-radar-console {
+    display: none;
+  }
+
+  .wx-command-header__lede,
+  .wx-network-strip {
+    margin-left: 80px;
+  }
+}
+
+@media (max-width: 720px) {
+  .catia-future-root {
+    width: min(100% - 20px, 1600px);
+    padding-top: 10px;
+  }
+
+  .wx-command-header {
+    min-height: auto;
+    padding: 28px 22px;
+    border-radius: 18px;
+  }
+
+  .wx-brand-row {
+    gap: 14px;
+  }
+
+  .wx-brand-mark {
+    width: 42px;
+    height: 42px;
+  }
+
+  .wx-command-header h1 {
+    font-size: clamp(2.1rem, 12vw, 3.4rem);
+  }
+
+  .wx-command-header__lede,
+  .wx-network-strip {
+    margin-left: 0;
+  }
+
+  .wx-command-header__lede {
+    margin-top: 24px;
+  }
+
+  .wx-section-label__hint {
+    display: none;
+  }
+
+  .catia-kpi-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .catia-panel {
+    padding: 17px;
+    border-radius: 14px;
+  }
+
+  .catia-live-health__cache {
+    width: 100%;
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 440px) {
+  .catia-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .wx-network-strip .wx-source-token {
+    display: none;
+  }
+}
+
+/* Leaflet marker clusters — dark ops chrome (bright defaults clash with the UI). */
+.marker-cluster-small,
+.marker-cluster-medium,
+.marker-cluster-large {
+  background-color: rgba(96, 221, 255, 0.18) !important;
+}
+
+.marker-cluster-small div,
+.marker-cluster-medium div,
+.marker-cluster-large div {
+  background-color: rgba(8, 28, 42, 0.92) !important;
+  color: #a7efff !important;
+  font-family: "SFMono-Regular", Consolas, monospace !important;
+  font-weight: 600 !important;
+  border: 1px solid rgba(96, 221, 255, 0.35);
+  box-shadow: 0 0 16px rgba(96, 221, 255, 0.18);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wx-brand-mark__orbit,
+  .wx-radar__sweep,
+  .wx-radar__ping,
+  .wx-status-dot--live {
+    animation: none !important;
+  }
+}
