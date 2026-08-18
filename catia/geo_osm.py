@@ -25,6 +25,7 @@ from catia.config import PERIL_CONFIG
 from catia.geo_hazards import PERIL_VIS_COLORS, aggregate_region_incidents
 from catia.geo_regions import REGION_CENTROIDS
 from catia.live_catastrophe_feeds import category_color
+from catia.live_geometry import events_to_feature_collection
 
 # Imported at module load: Dash rejects component libraries first imported
 # inside a callback (ImportedInsideCallbackError).
@@ -177,6 +178,19 @@ def build_osm_live_catastrophe_map(
         if tiso:
             parts.append(escape(tiso))
         parts.append(escape(f"CATIA score: {sc:.0f}"))
+        conf = ev.get("confidence")
+        if conf is not None:
+            try:
+                parts.append(escape(f"Confidence: {float(conf):.0%}"))
+            except (TypeError, ValueError):
+                pass
+        exp = ev.get("exposure_overlap") or {}
+        regions = exp.get("regions") or []
+        if regions:
+            parts.append(escape(f"Indicative exposure: {', '.join(str(r) for r in regions[:3])}"))
+        gkind = ev.get("geometry_kind")
+        if gkind and gkind not in ("point", "unknown"):
+            parts.append(escape(f"Footprint: {gkind}"))
         if src:
             parts.append(escape(f"Source: {src}"))
         url = ev.get("url")
@@ -198,15 +212,39 @@ def build_osm_live_catastrophe_map(
         )
 
     tile = dl.TileLayer(url=OSM_TILE_URL, attribution=OSM_ATTRIBUTION_HTML)
+    footprint_fc = events_to_feature_collection(events, include_points=False)
+    footprint_layer: Optional[Any] = None
+    if footprint_fc.get("features"):
+        footprint_layer = dl.GeoJSON(
+            data=footprint_fc,
+            options={
+                "style": {
+                    "color": "#22d3ee",
+                    "weight": 2,
+                    "fillColor": "#22d3ee",
+                    "fillOpacity": 0.12,
+                }
+            },
+        )
+
     layers: List[Any]
     if markers and cluster_markers:
         try:
             clustered = dl.MarkerClusterGroup(id="catia-live-marker-cluster", children=markers)
-            layers = [tile, clustered]
+            layers = [tile]
+            if footprint_layer is not None:
+                layers.append(footprint_layer)
+            layers.append(clustered)
         except Exception:
-            layers = [tile] + markers
+            layers = [tile]
+            if footprint_layer is not None:
+                layers.append(footprint_layer)
+            layers.extend(markers)
     else:
-        layers = [tile] + markers
+        layers = [tile]
+        if footprint_layer is not None:
+            layers.append(footprint_layer)
+        layers.extend(markers)
 
     return dl.Map(
         center=[20.0, 0.0],

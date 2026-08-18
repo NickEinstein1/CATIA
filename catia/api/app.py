@@ -26,6 +26,7 @@ from catia.api.routes import (
     simulation_router,
     mitigation_router
 )
+from catia.api.live_routes import live_router
 from catia.api.middleware import RequestIDMiddleware, RateLimitMiddleware
 from catia.api.schemas import ErrorResponse
 
@@ -185,6 +186,7 @@ app.include_router(perils_router, prefix="/api/v1")
 app.include_router(analysis_router, prefix="/api/v1")
 app.include_router(simulation_router, prefix="/api/v1")
 app.include_router(mitigation_router, prefix="/api/v1")
+app.include_router(live_router, prefix="/api/v1")
 
 
 @app.get("/", tags=["Root"])

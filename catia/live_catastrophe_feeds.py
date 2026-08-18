@@ -41,7 +41,7 @@ GDACS_EVENTLIST_URL = os.environ.get(
     "https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH?limit=80",
 )
 
-_CACHE_KEY_PERSIST = "catia_live_feed_v2"
+_CACHE_KEY_PERSIST = "catia_live_feed_v3"
 
 # In-memory cache: avoid hammering APIs when the dashboard callback runs often.
 _CACHE: Dict[str, Any] = {"ts": 0.0, "payload": None}
@@ -102,10 +102,13 @@ def _collect_lon_lat_pairs(coords: Any, acc: List[Tuple[float, float]]) -> None:
     """Flatten GeoJSON-like nested coordinate lists to (lon, lat) pairs."""
     if isinstance(coords, (int, float)):
         return
-    if isinstance(coords, list) and len(coords) >= 2:
-        a, b = coords[0], coords[1]
-        if isinstance(a, (int, float)) and isinstance(b, (int, float)):
-            acc.append((float(a), float(b)))
+    if isinstance(coords, list):
+        if (
+            len(coords) >= 2
+            and isinstance(coords[0], (int, float))
+            and isinstance(coords[1], (int, float))
+        ):
+            acc.append((float(coords[0]), float(coords[1])))
             return
         for c in coords:
             _collect_lon_lat_pairs(c, acc)
@@ -128,6 +131,8 @@ def _centroid_from_eonet_geometry(geom: List[Dict[str, Any]]) -> Optional[Tuple[
 
 
 def _parse_usgs_geojson(data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    from catia.live_event_schema import attach_provenance, finalize_event, point_geometry
+
     out: List[Dict[str, Any]] = []
     for feat in data.get("features") or []:
         props = feat.get("properties") or {}
@@ -139,20 +144,30 @@ def _parse_usgs_geojson(data: Dict[str, Any]) -> List[Dict[str, Any]]:
         mag = props.get("mag")
         place = props.get("place") or props.get("title") or "Earthquake"
         tid = str(props.get("id") or feat.get("id") or f"usgs-{lat:.2f}-{lon:.2f}")
-        out.append(
-            {
-                "id": f"usgs:{tid}",
-                "lat": lat,
-                "lon": lon,
-                "title": place,
-                "category": "earthquake",
-                "category_label": "Earthquake",
-                "time_iso": _iso_from_ms(props.get("time")),
-                "severity_label": f"M {mag:.1f}" if isinstance(mag, (int, float)) else "",
-                "source": "USGS",
-                "url": props.get("url") or "https://earthquake.usgs.gov/",
-            }
+        time_iso = _iso_from_ms(props.get("time"))
+        base = {
+            "id": f"usgs:{tid}",
+            "lat": lat,
+            "lon": lon,
+            "title": place,
+            "category": "earthquake",
+            "category_label": "Earthquake",
+            "time_iso": time_iso,
+            "severity_label": f"M {mag:.1f}" if isinstance(mag, (int, float)) else "",
+            "source": "USGS",
+            "url": props.get("url") or "https://earthquake.usgs.gov/",
+        }
+        if isinstance(mag, (int, float)):
+            base["severity_value"] = float(mag)
+        geom_dict = geom if geom.get("type") else point_geometry(lon, lat)
+        ev = attach_provenance(
+            base,
+            feed="usgs",
+            source_event_id=tid,
+            source_url=str(props.get("url") or "https://earthquake.usgs.gov/"),
+            observed_at=time_iso,
         )
+        out.append(finalize_event(ev, geometry=geom_dict))
     return out
 
 
@@ -180,6 +195,8 @@ GDACS_TYPE_MAP: Dict[str, Tuple[str, str]] = {
 
 
 def _parse_gdacs_geojson(data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    from catia.live_event_schema import attach_provenance, finalize_event, point_geometry
+
     out: List[Dict[str, Any]] = []
     for feat in data.get("features") or []:
         geom = feat.get("geometry") or {}
@@ -213,20 +230,28 @@ def _parse_gdacs_geojson(data: Dict[str, Any]) -> List[Dict[str, Any]]:
                 t_iso = dt.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
             except Exception:
                 t_iso = str(t_raw)[:32]
-        out.append(
-            {
-                "id": f"gdacs:{et}:{eid}:{epid}",
-                "lat": lat,
-                "lon": lon,
-                "title": title[:200],
-                "category": slug,
-                "category_label": label,
-                "time_iso": t_iso,
-                "severity_label": sev_label,
-                "source": "GDACS",
-                "url": str(link),
-            }
+        ev_id = f"gdacs:{et}:{eid}:{epid}"
+        base = {
+            "id": ev_id,
+            "lat": lat,
+            "lon": lon,
+            "title": title[:200],
+            "category": slug,
+            "category_label": label,
+            "time_iso": t_iso,
+            "severity_label": sev_label,
+            "source": "GDACS",
+            "url": str(link),
+        }
+        geom_dict = geom if geom.get("type") else point_geometry(lon, lat)
+        ev = attach_provenance(
+            base,
+            feed="gdacs",
+            source_event_id=str(eid or ev_id),
+            source_url=str(link),
+            observed_at=t_iso,
         )
+        out.append(finalize_event(ev, geometry=geom_dict))
     return out
 
 
@@ -393,6 +418,9 @@ def fetch_all_live_events(
 
 def _parse_eonet_json(data: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Parse EONET API JSON (same as ``fetch_eonet_events`` body)."""
+    from catia.live_event_schema import attach_provenance, finalize_event, point_geometry
+    from catia.live_geometry import eonet_entries_to_geometries, eonet_primary_geometry
+
     out: List[Dict[str, Any]] = []
     for ev in data.get("events") or []:
         geom = ev.get("geometry") or []
@@ -402,26 +430,35 @@ def _parse_eonet_json(data: Dict[str, Any]) -> List[Dict[str, Any]]:
         lat, lon = ll
         cats = ev.get("categories") or [{}]
         cat_title = (cats[0] or {}).get("title") or "Natural event"
-        cat_id = str((cats[0] or {}).get("id") or "eonet").lower()
         slug = cat_title.lower().replace(" ", "_")[:40]
         eid = str(ev.get("id") or ev.get("title") or "eonet")
         link = ev.get("link") or "https://eonet.gsfc.nasa.gov/"
         title = str(ev.get("title") or cat_title)
         t_iso = _latest_eonet_geometry_time_iso(geom)
-        out.append(
-            {
-                "id": f"eonet:{eid}",
-                "lat": lat,
-                "lon": lon,
-                "title": title[:200],
-                "category": slug,
-                "category_label": cat_title,
-                "time_iso": t_iso,
-                "severity_label": "",
-                "source": "NASA EONET",
-                "url": link,
-            }
+        geoms = eonet_entries_to_geometries(geom)
+        primary = eonet_primary_geometry(geom) or point_geometry(lon, lat)
+        extra = [g for g in geoms if str(g.get("type") or "").lower() != "point"]
+        base = {
+            "id": f"eonet:{eid}",
+            "lat": lat,
+            "lon": lon,
+            "title": title[:200],
+            "category": slug,
+            "category_label": cat_title,
+            "time_iso": t_iso,
+            "severity_label": "",
+            "source": "NASA EONET",
+            "url": link,
+            "centroid_source": "computed" if primary.get("type") != "Point" else "native",
+        }
+        row = attach_provenance(
+            base,
+            feed="eonet",
+            source_event_id=eid,
+            source_url=str(link),
+            observed_at=t_iso,
         )
+        out.append(finalize_event(row, geometry=primary, geometry_collection=extra or None))
     return out
 
 

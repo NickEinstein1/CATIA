@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from catia.geo_hazards import PERIL_VIS_COLORS
 from catia.live_catastrophe_feeds import category_color
+from catia.live_geometry import events_to_feature_collection
 
 # Imported at module load: Dash rejects component libraries first imported
 # inside a callback (ImportedInsideCallbackError).
@@ -126,6 +127,22 @@ def build_live_deck_earth_map(
     )
 
     layers: List[Any] = []
+    footprint_fc = events_to_feature_collection(events, include_points=False)
+    if footprint_fc.get("features") and GeoJsonLayer is not None:
+        layers.append(
+            GeoJsonLayer(
+                id="catia-live-footprints",
+                data=footprint_fc,
+                pickable=True,
+                stroked=True,
+                filled=True,
+                get_fill_color=[34, 211, 238, 48],
+                get_line_color=[34, 211, 238, 210],
+                line_width_min_pixels=2,
+                opacity=0.9,
+            )
+        )
+
     overlay_on = os.environ.get("CATIA_EXPOSURE_OVERLAY", "1").strip().lower() not in (
         "0",
         "false",

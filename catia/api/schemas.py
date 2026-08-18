@@ -265,3 +265,86 @@ class StressScenarioResponse(BaseModel):
     baseline: Dict[str, Any]
     scenarios: Dict[str, StressedMetrics]
 
+
+# ============================================================================
+# LIVE INTELLIGENCE (API-first)
+# ============================================================================
+
+class LiveProvenance(BaseModel):
+    """Source lineage for a live event."""
+    feed: str
+    source: str
+    source_event_id: str
+    source_url: str = ""
+    parser_version: str = ""
+    ingested_at: str = ""
+    observed_at: str = ""
+    updated_at: str = ""
+
+
+class LiveExposureOverlap(BaseModel):
+    """Indicative exposure-region overlap (not modeled loss)."""
+    regions: List[str] = Field(default_factory=list)
+    tier_hints: List[str] = Field(default_factory=list)
+    overlap_score: float = 0.0
+
+
+class LiveEvent(BaseModel):
+    """Normalized live catastrophe event with intelligence fields."""
+    id: str
+    lat: float
+    lon: float
+    title: str
+    category: str
+    category_label: str = ""
+    time_iso: str = ""
+    severity_label: str = ""
+    source: str
+    url: str = ""
+    geometry: Optional[Dict[str, Any]] = None
+    geometry_kind: Optional[str] = None
+    geometry_collection: Optional[List[Dict[str, Any]]] = None
+    provenance: Optional[LiveProvenance] = None
+    confidence: Optional[float] = None
+    confidence_factors: Optional[Dict[str, float]] = None
+    exposure_overlap: Optional[LiveExposureOverlap] = None
+    catia_peril: Optional[str] = None
+    catia_score: Optional[float] = None
+    model_config = {"extra": "allow"}
+
+
+class LiveEventsResponse(BaseModel):
+    """Live events payload for agents and external systems."""
+    fetched_at_iso: str
+    offline_mode: bool = False
+    cache_hit: bool = False
+    cache_backend: str = "memory"
+    sources_ok: Dict[str, bool] = Field(default_factory=dict)
+    latency_ms: Dict[str, float] = Field(default_factory=dict)
+    http_status: Dict[str, Optional[int]] = Field(default_factory=dict)
+    errors: List[str] = Field(default_factory=list)
+    count: int = 0
+    geometry_summary: Optional[Dict[str, int]] = None
+    disclaimer: Optional[str] = None
+    events: List[LiveEvent] = Field(default_factory=list)
+
+
+class LiveHealthResponse(BaseModel):
+    """Live feed health strip."""
+    fetched_at_iso: str
+    offline_mode: bool = False
+    cache_hit: bool = False
+    cache_backend: str = "memory"
+    sources_ok: Dict[str, bool] = Field(default_factory=dict)
+    latency_ms: Dict[str, float] = Field(default_factory=dict)
+    http_status: Dict[str, Optional[int]] = Field(default_factory=dict)
+    errors: List[str] = Field(default_factory=list)
+    event_count: int = 0
+
+
+class LiveGeoJsonResponse(BaseModel):
+    """GeoJSON overlay for live event footprints."""
+    fetched_at_iso: str
+    feature_count: int
+    geojson: Dict[str, Any]
+

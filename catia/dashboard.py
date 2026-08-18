@@ -34,9 +34,9 @@ from catia.geo_deck import build_live_deck_earth_map
 from catia.geo_osm import build_osm_leaflet_map, build_osm_live_catastrophe_map
 from catia.geo_regions import REGION_CENTROIDS
 from catia.live_alert_rules import evaluate_live_rules, load_rules
-from catia.live_catastrophe_feeds import LiveFeedResult, category_color, fetch_all_live_events
+from catia.live_catastrophe_feeds import LiveFeedResult, category_color
 from catia.live_compliance import attribution_footer
-from catia.live_intel import enrich_and_rank_events
+from catia.live_service import fetch_enriched_live_events
 
 logger = logging.getLogger(__name__)
 
@@ -893,8 +893,6 @@ def create_dash_app(
             )
 
         if active == "tab-live":
-            feed = fetch_all_live_events(force=force_live)
-            raw_n = len(feed.events)
             pf = (peril_sel or "all").strip()
             try:
                 min_sc = float(min_score) if min_score is not None else 0.0
@@ -904,14 +902,27 @@ def create_dash_app(
             region_override = (region_sel or "").strip() or None
             focal_run = (report or {}).get("metadata", {}).get("region")
             focal_eff = region_override if region_override else focal_run
-
             peril_arg = None if pf == "all" else pf
-            events = enrich_and_rank_events(
-                feed.events,
+
+            live_payload = fetch_enriched_live_events(
                 focal_region=focal_eff,
                 peril_filter=peril_arg,
+                min_score=min_sc,
+                force=force_live,
             )
-            events = [e for e in events if float(e.get("catia_score") or 0.0) >= min_sc]
+            events = live_payload["events"]
+            raw_n = int(live_payload.get("count_raw") or 0)
+            feed = LiveFeedResult(
+                events=events,
+                errors=list(live_payload.get("errors") or []),
+                fetched_at_iso=str(live_payload.get("fetched_at_iso") or ""),
+                sources_ok=dict(live_payload.get("sources_ok") or {}),
+                latency_ms=dict(live_payload.get("latency_ms") or {}),
+                http_status=dict(live_payload.get("http_status") or {}),
+                cache_hit=bool(live_payload.get("cache_hit")),
+                cache_backend=str(live_payload.get("cache_backend") or "memory"),
+                offline_mode=bool(live_payload.get("offline_mode")),
+            )
 
             top_sc = max((float(e.get("catia_score") or 0.0) for e in events), default=0.0)
 
@@ -1051,12 +1062,16 @@ def create_dash_app(
                         html.Th("Where / what"),
                         html.Th("Type"),
                         html.Th("Source"),
-                        html.Th("When / detail"),
-                    ],
-                    className="catia-table__headrow",
-                )
-            ]
+                            html.Th("When / detail"),
+                            html.Th("Conf / exposure"),
+                        ],
+                        className="catia-table__headrow",
+                    )
+                ]
             for e in events[:12]:
+                exp = e.get("exposure_overlap") or {}
+                exp_txt = ", ".join(exp.get("regions") or [])[:40] or "—"
+                conf_txt = f"{float(e.get('confidence') or 0):.0%}" if e.get("confidence") is not None else "—"
                 top_alert_rows.append(
                     html.Tr(
                         className="catia-table__row",
@@ -1077,6 +1092,7 @@ def create_dash_app(
                                 )
                                 or "—"
                             ),
+                            html.Td(f"{conf_txt} · {exp_txt}"),
                         ],
                     )
                 )
@@ -1090,11 +1106,15 @@ def create_dash_app(
                         html.Th("Type"),
                         html.Th("Source"),
                         html.Th("When / detail"),
+                        html.Th("Conf / exposure"),
                     ],
                     className="catia-table__headrow",
                 )
             ]
             for e in events[:40]:
+                exp = e.get("exposure_overlap") or {}
+                exp_txt = ", ".join(exp.get("regions") or [])[:40] or "—"
+                conf_txt = f"{float(e.get('confidence') or 0):.0%}" if e.get("confidence") is not None else "—"
                 table_rows.append(
                     html.Tr(
                         className="catia-table__row",
@@ -1115,6 +1135,7 @@ def create_dash_app(
                                 )
                                 or "—"
                             ),
+                            html.Td(f"{conf_txt} · {exp_txt}"),
                         ],
                     )
                 )

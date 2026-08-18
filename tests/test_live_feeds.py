@@ -30,6 +30,8 @@ def test_parse_usgs_geojson_minimal():
     assert r["lat"] == 35.2
     assert r["lon"] == -100.5
     assert "M 4.2" in r["severity_label"]
+    assert r.get("geometry", {}).get("type") == "Point"
+    assert r.get("provenance", {}).get("feed") == "usgs"
 
 
 def test_parse_eonet_json_minimal():
