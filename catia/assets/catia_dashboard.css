@@ -511,9 +511,111 @@ a.catia-link:hover {
   margin-bottom: 6px;
 }
 
+.catia-live-toolbar {
+  position: relative;
+  z-index: 30;
+  overflow: visible;
+}
+
+.catia-live-toolbar__field {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+
+.catia-live-toolbar__field:focus-within {
+  z-index: 40;
+}
+
+.catia-live-toolbar__grid {
+  overflow: visible;
+}
+
+/* Dash 4 dropdown (replaces legacy react-select .Select-* rules) */
+.catia-dash-dropdown.dash-dropdown,
+.catia-live-toolbar .dash-dropdown {
+  width: 100%;
+  min-height: 40px;
+  color: var(--wx-text);
+  font-size: 0.9rem;
+}
+
+.catia-dash-dropdown .dash-dropdown-trigger,
+.catia-live-toolbar .dash-dropdown-trigger {
+  min-height: 40px;
+}
+
+.catia-dash-dropdown .dash-dropdown-content,
+.catia-live-toolbar .dash-dropdown-content {
+  z-index: 1200 !important;
+  border-color: var(--wx-line-hot) !important;
+  background: rgba(4, 12, 20, 0.98) !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(34, 211, 238, 0.12);
+}
+
+.catia-dash-dropdown .dash-dropdown-option,
+.catia-live-toolbar .dash-dropdown-option {
+  color: var(--wx-text) !important;
+  font-size: 0.88rem;
+}
+
+.catia-dash-dropdown .dash-dropdown-option:hover,
+.catia-live-toolbar .dash-dropdown-option:hover,
+.catia-dash-dropdown .dash-dropdown-option[data-highlighted],
+.catia-live-toolbar .dash-dropdown-option[data-highlighted] {
+  background: rgba(34, 211, 238, 0.12) !important;
+  color: #a7f3ff !important;
+}
+
+.catia-dash-dropdown .dash-dropdown-search,
+.catia-live-toolbar .dash-dropdown-search {
+  color: var(--wx-text) !important;
+}
+
+.catia-dash-dropdown .dash-dropdown-value,
+.catia-live-toolbar .dash-dropdown-value {
+  color: var(--wx-text) !important;
+}
+
+.catia-dash-dropdown .dash-dropdown-placeholder,
+.catia-live-toolbar .dash-dropdown-placeholder {
+  color: var(--wx-dim) !important;
+}
+
+.catia-loading-placeholder {
+  padding: 28px 20px;
+  text-align: center;
+  color: var(--wx-dim);
+}
+
+.catia-live-tab-body {
+  min-height: 200px;
+}
+
+/* Legacy react-select (older Dash) — keep as fallback */
 .catia-dash-dropdown .Select-control {
   background-color: rgba(7, 11, 20, 0.88) !important;
   border-color: rgba(56, 189, 248, 0.35) !important;
+}
+
+.catia-dash-dropdown .Select-menu-outer {
+  z-index: 1200 !important;
+  background: rgba(4, 12, 20, 0.98) !important;
+  border-color: rgba(56, 189, 248, 0.35) !important;
+}
+
+.catia-dash-dropdown .Select-option {
+  color: #e2e8f0 !important;
+  background: transparent !important;
+}
+
+.catia-dash-dropdown .Select-option.is-focused {
+  background: rgba(34, 211, 238, 0.12) !important;
+}
+
+.catia-dash-dropdown .Select-value-label,
+.catia-dash-dropdown .Select-placeholder {
+  color: #e2e8f0 !important;
 }
 
 .catia-dash-slider .rc-slider-rail {
@@ -789,6 +891,18 @@ body::before {
   margin: 0 auto;
   padding: 20px 0 64px;
   font-family: Inter, "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+  /* Dash 4 dropdown design tokens (dark command theme) */
+  --Dash-Spacing: 4px;
+  --Dash-Fill-Inverse-Strong: rgba(4, 12, 20, 0.96);
+  --Dash-Fill-Interactive-Strong: #22d3ee;
+  --Dash-Fill-Interactive-Weak: rgba(34, 211, 238, 0.14);
+  --Dash-Fill-Disabled: rgba(51, 65, 85, 0.55);
+  --Dash-Stroke-Strong: rgba(56, 189, 248, 0.38);
+  --Dash-Text-Strong: #e2e8f0;
+  --Dash-Text-Weak: #94a3b8;
+  --Dash-Text-Disabled: #64748b;
+  --Dash-Shading-Strong: rgba(0, 0, 0, 0.45);
+  --Dash-Shading-Weak: rgba(0, 0, 0, 0.22);
 }
 
 .wx-ambient-grid {
@@ -1258,6 +1372,7 @@ body::before {
   margin-top: 10px !important;
   padding: 18px 20px;
   border-radius: var(--wx-radius);
+  overflow: visible;
 }
 
 .catia-live-toolbar__title {
@@ -1266,7 +1381,7 @@ body::before {
   font-weight: 560;
 }
 
-.catia-dash-dropdown .Select-control {
+.catia-dash-dropdown.dash-dropdown {
   min-height: 40px;
   border-color: var(--wx-line) !important;
   border-radius: 9px !important;

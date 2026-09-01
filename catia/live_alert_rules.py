@@ -9,12 +9,13 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Optional
 
-import math
+from typing import Any, Dict, List, Optional
 
 from catia.config import OUTPUT_CONFIG
 from catia.geo_regions import REGION_CENTROIDS
@@ -44,9 +45,11 @@ def rules_path() -> Path:
     return base / "live_alert_rules.json"
 
 
-def load_rules() -> List[Dict[str, Any]]:
-    path = rules_path()
-    if not path.is_file():
+@lru_cache(maxsize=4)
+def _load_rules_cached(path_str: str, mtime: float) -> List[Dict[str, Any]]:
+    """Load rules from disk; ``mtime`` participates in cache key via caller."""
+    path = Path(path_str)
+    if mtime < 0 or not path.is_file():
         return list(DEFAULT_RULES)
     try:
         with open(path, encoding="utf-8") as f:
@@ -58,6 +61,12 @@ def load_rules() -> List[Dict[str, Any]]:
     except Exception as e:
         logger.warning("Could not load live alert rules from %s: %s", path, e)
     return list(DEFAULT_RULES)
+
+
+def load_rules() -> List[Dict[str, Any]]:
+    path = rules_path()
+    mtime = path.stat().st_mtime if path.is_file() else -1.0
+    return _load_rules_cached(str(path), mtime)
 
 
 @dataclass

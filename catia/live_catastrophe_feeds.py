@@ -8,6 +8,9 @@ Sources (no API keys; respect each provider's terms and rate limits):
 - **GDACS** — JRC / UN-style event list (GeoJSON API).
 
 Data is normalized for the dashboard; timestamps and positions are as reported by the source.
+
+Proxy: by default live HTTP clients bypass ``HTTP_PROXY`` / ``HTTPS_PROXY`` (common when an IDE
+sets a dead local proxy). Set ``CATIA_LIVE_USE_SYSTEM_PROXY=1`` to honor system proxy env vars.
 """
 
 from __future__ import annotations
@@ -48,6 +51,46 @@ _CACHE: Dict[str, Any] = {"ts": 0.0, "payload": None}
 _DEFAULT_TTL_SEC = float(os.environ.get("CATIA_LIVE_FEED_CACHE_SEC", "90"))
 
 
+def _use_system_proxy() -> bool:
+    """When false (default), ignore HTTP(S)_PROXY env vars for public feed APIs."""
+    return os.environ.get("CATIA_LIVE_USE_SYSTEM_PROXY", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+
+def _live_proxies() -> Optional[Dict[str, Optional[str]]]:
+    """
+    Proxy policy for live feeds.
+
+    - Default: direct connection (bypasses IDE/VPN proxy env like 127.0.0.1:50700).
+    - ``CATIA_LIVE_USE_SYSTEM_PROXY=1``: honor ``HTTP_PROXY`` / ``HTTPS_PROXY``.
+    - ``CATIA_LIVE_HTTPS_PROXY`` / ``CATIA_LIVE_HTTP_PROXY``: explicit proxy URLs.
+    """
+    https = os.environ.get("CATIA_LIVE_HTTPS_PROXY", "").strip()
+    http = os.environ.get("CATIA_LIVE_HTTP_PROXY", "").strip()
+    if https or http:
+        return {"http": http or https, "https": https or http}
+    if _use_system_proxy():
+        return None
+    return {"http": None, "https": None}
+
+
+def _session() -> requests.Session:
+    s = requests.Session()
+    s.trust_env = _use_system_proxy()
+    proxies = _live_proxies()
+    if proxies is not None:
+        s.proxies.update(proxies)
+    s.headers.update({"User-Agent": USER_AGENT, "Accept": "application/json"})
+    retry = Retry(total=2, backoff_factor=0.5, status_forcelist=[429, 500, 502, 503, 504])
+    s.mount("https://", HTTPAdapter(max_retries=retry))
+    s.mount("http://", HTTPAdapter(max_retries=retry))
+    return s
+
+
 def _get_timed(
     session: requests.Session, url: str, *, params: Optional[Dict[str, Any]] = None, timeout: int = 15
 ) -> Tuple[Any, float, int]:
@@ -56,14 +99,6 @@ def _get_timed(
     r = session.get(url, params=params, timeout=timeout)
     ms = (time.perf_counter() - t0) * 1000.0
     return r, ms, r.status_code
-
-
-def _session() -> requests.Session:
-    s = requests.Session()
-    s.headers.update({"User-Agent": USER_AGENT, "Accept": "application/json"})
-    retry = Retry(total=2, backoff_factor=0.5, status_forcelist=[429, 500, 502, 503, 504])
-    s.mount("https://", HTTPAdapter(max_retries=retry))
-    return s
 
 
 def _iso_from_ms(ms: Optional[float]) -> str:

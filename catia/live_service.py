@@ -17,6 +17,49 @@ def _post_process_event(event: Dict[str, Any]) -> Dict[str, Any]:
     return attach_exposure_overlap(ev)
 
 
+def fetch_live_events_base(
+    *,
+    force: bool = False,
+    use_cache: bool = True,
+) -> Dict[str, Any]:
+    """Fetch and post-process events without scoring filters (for dashboard store caching)."""
+    feed: LiveFeedResult = fetch_all_live_events(use_cache=use_cache, force=force)
+    processed = [_post_process_event(e) for e in feed.events]
+    return {
+        "events": processed,
+        "fetched_at_iso": feed.fetched_at_iso,
+        "offline_mode": feed.offline_mode,
+        "cache_hit": feed.cache_hit,
+        "cache_backend": feed.cache_backend,
+        "sources_ok": feed.sources_ok,
+        "latency_ms": feed.latency_ms,
+        "http_status": feed.http_status,
+        "errors": feed.errors,
+        "count_raw": len(feed.events),
+    }
+
+
+def enrich_stored_live_events(
+    store: Dict[str, Any],
+    *,
+    focal_region: Optional[str] = None,
+    peril_filter: Optional[str] = None,
+    min_score: float = 0.0,
+    limit: int = 500,
+) -> Dict[str, Any]:
+    """Apply CATIA scoring and filters to cached post-processed events (no network)."""
+    processed = list(store.get("events") or [])
+    enriched = enrich_and_rank_events(
+        processed,
+        focal_region=focal_region,
+        peril_filter=peril_filter,
+        limit=limit,
+    )
+    if min_score > 0:
+        enriched = [e for e in enriched if float(e.get("catia_score") or 0.0) >= min_score]
+    return {**store, "events": enriched, "count_filtered": len(enriched)}
+
+
 def fetch_enriched_live_events(
     *,
     focal_region: Optional[str] = None,
@@ -32,19 +75,19 @@ def fetch_enriched_live_events(
     Returns a JSON-serializable payload for API consumers and agents.
     """
     feed: LiveFeedResult = fetch_all_live_events(use_cache=use_cache, force=force)
-    processed = [_post_process_event(e) for e in feed.events]
-    enriched = enrich_and_rank_events(
-        processed,
+    base = fetch_live_events_base(force=force, use_cache=use_cache)
+    enriched = enrich_stored_live_events(
+        base,
         focal_region=focal_region,
         peril_filter=peril_filter,
+        min_score=min_score,
         limit=limit,
     )
-    if min_score > 0:
-        enriched = [e for e in enriched if float(e.get("catia_score") or 0.0) >= min_score]
+    events = enriched["events"]
 
-    with_geom = sum(1 for e in enriched if e.get("geometry_kind") not in (None, "", "unknown"))
+    with_geom = sum(1 for e in events if e.get("geometry_kind") not in (None, "", "unknown"))
     with_footprint = sum(
-        1 for e in enriched if str(e.get("geometry_kind") or "") in ("polygon", "linestring")
+        1 for e in events if str(e.get("geometry_kind") or "") in ("polygon", "linestring")
     )
 
     return {
@@ -56,13 +99,13 @@ def fetch_enriched_live_events(
         "latency_ms": feed.latency_ms,
         "http_status": feed.http_status,
         "errors": feed.errors,
-        "count_raw": len(feed.events),
-        "count_filtered": len(enriched),
+        "count_raw": base["count_raw"],
+        "count_filtered": enriched["count_filtered"],
         "geometry_summary": {
             "with_geometry": with_geom,
             "with_footprint": with_footprint,
         },
-        "events": enriched,
+        "events": events,
         "disclaimer": (
             "Observational live intelligence only — heuristic CATIA scores and indicative "
             "exposure overlap are not modeled loss or underwriting advice."

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from catia.live_catastrophe_feeds import _parse_eonet_json, _parse_gdacs_geojson, _parse_usgs_geojson
+from catia.live_catastrophe_feeds import _live_proxies, _parse_eonet_json, _parse_gdacs_geojson, _parse_usgs_geojson, _session
 
 
 def test_parse_usgs_geojson_minimal():
@@ -32,6 +32,24 @@ def test_parse_usgs_geojson_minimal():
     assert "M 4.2" in r["severity_label"]
     assert r.get("geometry", {}).get("type") == "Point"
     assert r.get("provenance", {}).get("feed") == "usgs"
+
+
+def test_session_bypasses_env_proxy_by_default(monkeypatch):
+    monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:50700")
+    monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:50700")
+    monkeypatch.delenv("CATIA_LIVE_USE_SYSTEM_PROXY", raising=False)
+    sess = _session()
+    assert sess.trust_env is False
+    assert sess.proxies.get("https") is None
+    assert sess.proxies.get("http") is None
+
+
+def test_session_honors_system_proxy_when_enabled(monkeypatch):
+    monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:50700")
+    monkeypatch.setenv("CATIA_LIVE_USE_SYSTEM_PROXY", "1")
+    sess = _session()
+    assert sess.trust_env is True
+    assert _live_proxies() is None
 
 
 def test_parse_eonet_json_minimal():
