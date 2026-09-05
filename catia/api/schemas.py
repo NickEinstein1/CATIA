@@ -348,3 +348,59 @@ class LiveGeoJsonResponse(BaseModel):
     feature_count: int
     geojson: Dict[str, Any]
 
+
+# ============================================================================
+# SITE VIABILITY (property / land screening)
+# ============================================================================
+
+class PropertyType(str, Enum):
+    """Decision context for site assessment."""
+    BUY_LAND = "buy_land"
+    BUILD = "build"
+    BUY_BUILDING = "buy_building"
+
+
+class SiteAssessRequest(BaseModel):
+    """Assess viability of buying land, building, or buying a property at a site."""
+    lat: Optional[float] = Field(default=None, description="Latitude (−90…90)")
+    lon: Optional[float] = Field(default=None, description="Longitude (−180…180)")
+    address: Optional[str] = Field(
+        default=None,
+        description="Optional address (requires CATIA_SITE_GEOCODE=1 for Nominatim)",
+    )
+    property_type: PropertyType = Field(
+        default=PropertyType.BUY_BUILDING,
+        description="buy_land | build | buy_building",
+    )
+    construction_type: Optional[str] = Field(default=None)
+    occupancy: Optional[str] = Field(default=None)
+    tiv: Optional[float] = Field(
+        default=None,
+        gt=0,
+        description="Optional total insured / development value (USD) for indicative simulation",
+    )
+    include_simulation: bool = Field(
+        default=False,
+        description="Run indicative exposure×vulnerability Monte Carlo",
+    )
+    scenario_id: Optional[str] = Field(default=None, description="Climate scenario id")
+
+
+class SiteAssessResponse(BaseModel):
+    """Site viability screening response."""
+    assessed_at: str
+    property_type: str
+    construction_type: Optional[str] = None
+    occupancy: Optional[str] = None
+    scenario_id: str = "baseline"
+    location: Dict[str, Any]
+    risk_score: float
+    risk_category: str
+    score_components: Dict[str, float] = Field(default_factory=dict)
+    hazard_assessment: List[Dict[str, Any]] = Field(default_factory=list)
+    topography: Dict[str, Any] = Field(default_factory=dict)
+    insurance_viability: Dict[str, Any] = Field(default_factory=dict)
+    indicative_simulation: Optional[Dict[str, Any]] = None
+    disclaimer: str
+    model_config = {"extra": "allow"}
+

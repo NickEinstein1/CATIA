@@ -37,7 +37,9 @@ from catia.live_alert_rules import evaluate_live_rules, load_rules
 from catia.live_catastrophe_feeds import LiveFeedResult, category_color
 from catia.live_compliance import attribution_footer
 from catia.dashboard_live import build_live_earth_content
+from catia.dashboard_site import build_site_assessment_panel
 from catia.live_service import fetch_live_events_base
+from catia.site_viability import assess_site_viability
 
 logger = logging.getLogger(__name__)
 
@@ -646,12 +648,149 @@ def create_dash_app(
                 children=[
                     dcc.Tab(label="01  Global", value="tab-globe"),
                     dcc.Tab(label="02  Live Earth", value="tab-live"),
-                    dcc.Tab(label="03  Overview", value="tab-overview"),
-                    dcc.Tab(label="04  Latest Run", value="tab-run"),
-                    dcc.Tab(label="05  Analytics", value="tab-charts"),
-                    dcc.Tab(label="06  Scenarios", value="tab-perils"),
-                    dcc.Tab(label="07  Assumptions", value="tab-assumptions"),
-                    dcc.Tab(label="08  System", value="tab-api"),
+                    dcc.Tab(label="03  Site Assess", value="tab-site"),
+                    dcc.Tab(label="04  Overview", value="tab-overview"),
+                    dcc.Tab(label="05  Latest Run", value="tab-run"),
+                    dcc.Tab(label="06  Analytics", value="tab-charts"),
+                    dcc.Tab(label="07  Scenarios", value="tab-perils"),
+                    dcc.Tab(label="08  Assumptions", value="tab-assumptions"),
+                    dcc.Tab(label="09  System", value="tab-api"),
+                ],
+            ),
+            html.Div(
+                id="site-toolbar",
+                className="catia-live-toolbar",
+                style={"display": "none"},
+                children=[
+                    html.Div(
+                        className="catia-live-toolbar__header",
+                        children=[
+                            html.Span(
+                                "Site viability assessment",
+                                className="catia-live-toolbar__title",
+                            ),
+                            html.Span(
+                                "Screen buy-land / build / buy-building decisions using "
+                                "regional peril load, topography stubs, and insurance guidance.",
+                                className="catia-live-toolbar__hint",
+                            ),
+                        ],
+                    ),
+                    html.Div(
+                        className="catia-live-toolbar__grid",
+                        children=[
+                            html.Div(
+                                className="catia-live-toolbar__field",
+                                children=[
+                                    html.Label("Latitude", className="catia-live-toolbar__label"),
+                                    dcc.Input(
+                                        id="site-lat",
+                                        type="number",
+                                        value=29.95,
+                                        step=0.0001,
+                                        className="catia-site-input",
+                                        persistence=True,
+                                        persistence_type="session",
+                                    ),
+                                ],
+                            ),
+                            html.Div(
+                                className="catia-live-toolbar__field",
+                                children=[
+                                    html.Label("Longitude", className="catia-live-toolbar__label"),
+                                    dcc.Input(
+                                        id="site-lon",
+                                        type="number",
+                                        value=-90.07,
+                                        step=0.0001,
+                                        className="catia-site-input",
+                                        persistence=True,
+                                        persistence_type="session",
+                                    ),
+                                ],
+                            ),
+                            html.Div(
+                                className="catia-live-toolbar__field",
+                                children=[
+                                    html.Label("Property intent", className="catia-live-toolbar__label"),
+                                    dcc.Dropdown(
+                                        id="site-property-type",
+                                        options=[
+                                            {"label": "Buy land", "value": "buy_land"},
+                                            {"label": "Build", "value": "build"},
+                                            {"label": "Buy building", "value": "buy_building"},
+                                        ],
+                                        value="buy_building",
+                                        clearable=False,
+                                        className="catia-dash-dropdown",
+                                        persistence=True,
+                                        persistence_type="session",
+                                    ),
+                                ],
+                            ),
+                            html.Div(
+                                className="catia-live-toolbar__field",
+                                children=[
+                                    html.Label("TIV / value (USD)", className="catia-live-toolbar__label"),
+                                    dcc.Input(
+                                        id="site-tiv",
+                                        type="number",
+                                        value=500000,
+                                        min=0,
+                                        step=10000,
+                                        className="catia-site-input",
+                                        persistence=True,
+                                        persistence_type="session",
+                                    ),
+                                ],
+                            ),
+                        ],
+                    ),
+                    html.Div(
+                        className="catia-live-toolbar__row2",
+                        children=[
+                            html.Div(
+                                className="catia-live-toolbar__field catia-live-toolbar__field--wide",
+                                children=[
+                                    html.Label(
+                                        "Address (optional — needs CATIA_SITE_GEOCODE=1)",
+                                        className="catia-live-toolbar__label",
+                                    ),
+                                    dcc.Input(
+                                        id="site-address",
+                                        type="text",
+                                        placeholder="e.g. New Orleans, LA",
+                                        className="catia-site-input catia-site-input--wide",
+                                        persistence=True,
+                                        persistence_type="session",
+                                    ),
+                                ],
+                            ),
+                            html.Div(
+                                className="catia-live-toolbar__actions",
+                                children=[
+                                    dcc.Checklist(
+                                        id="site-include-sim",
+                                        options=[
+                                            {
+                                                "label": " Indicative simulation",
+                                                "value": "sim",
+                                            }
+                                        ],
+                                        value=[],
+                                        className="catia-site-check",
+                                    ),
+                                    html.Button(
+                                        "Assess site",
+                                        id="site-assess-btn",
+                                        type="button",
+                                        n_clicks=0,
+                                        className="catia-btn",
+                                    ),
+                                ],
+                            ),
+                        ],
+                    ),
                 ],
             ),
             html.Div(
@@ -814,12 +953,21 @@ def create_dash_app(
 
     @app.callback(
         Output("live-toolbar", "style"),
+        Output("site-toolbar", "style"),
         Input("dash-tabs", "value"),
     )
-    def toggle_live_toolbar(active: str):
-        if active == "tab-live":
-            return {"display": "block", "marginTop": "12px", "marginBottom": "4px"}
-        return {"display": "none"}
+    def toggle_toolbars(active: str):
+        live_style = (
+            {"display": "block", "marginTop": "12px", "marginBottom": "4px"}
+            if active == "tab-live"
+            else {"display": "none"}
+        )
+        site_style = (
+            {"display": "block", "marginTop": "12px", "marginBottom": "4px"}
+            if active == "tab-site"
+            else {"display": "none"}
+        )
+        return live_style, site_style
 
     @app.callback(
         Output("tab-content", "children"),
@@ -919,6 +1067,13 @@ def create_dash_app(
                         className="catia-section-head__sub",
                     ),
                 ),
+            )
+
+        if active == "tab-site":
+            return html.Div(
+                id="site-tab-content",
+                className="catia-live-tab-body",
+                children=build_site_assessment_panel(None),
             )
 
         if active == "tab-overview":
@@ -1068,6 +1223,77 @@ def create_dash_app(
                 ]),
             ],
         )
+
+    @app.callback(
+        Output("site-tab-content", "children"),
+        Input("site-assess-btn", "n_clicks"),
+        Input("dash-tabs", "value"),
+        State("site-lat", "value"),
+        State("site-lon", "value"),
+        State("site-address", "value"),
+        State("site-property-type", "value"),
+        State("site-tiv", "value"),
+        State("site-include-sim", "value"),
+        prevent_initial_call=False,
+    )
+    def render_site_tab(
+        n_clicks: Optional[int],
+        active: str,
+        lat: Optional[Any],
+        lon: Optional[Any],
+        address: Optional[str],
+        property_type: Optional[str],
+        tiv: Optional[Any],
+        include_sim: Optional[List[str]],
+    ):
+        if active != "tab-site":
+            raise PreventUpdate
+        triggered = ""
+        if callback_context.triggered:
+            triggered = callback_context.triggered[0]["prop_id"].split(".")[0]
+        # On tab entry without a click, show empty panel (already in layout); allow assess
+        if triggered == "dash-tabs" and not n_clicks:
+            return build_site_assessment_panel(None)
+        if not n_clicks and triggered != "site-assess-btn":
+            return build_site_assessment_panel(None)
+        try:
+            lat_f = float(lat) if lat is not None and str(lat).strip() != "" else None
+            lon_f = float(lon) if lon is not None and str(lon).strip() != "" else None
+        except (TypeError, ValueError):
+            return html.Div(
+                className="catia-flash catia-flash--warn",
+                children=[html.P("Invalid latitude/longitude.", className="catia-flash__text")],
+            )
+        try:
+            tiv_f = float(tiv) if tiv is not None and str(tiv).strip() != "" else None
+        except (TypeError, ValueError):
+            tiv_f = None
+        addr = (address or "").strip() or None
+        # Prefer coords when both present; allow address-only when geocode enabled
+        use_lat, use_lon = lat_f, lon_f
+        if addr and (lat_f is None or lon_f is None):
+            use_lat, use_lon = None, None
+        try:
+            result = assess_site_viability(
+                lat=use_lat,
+                lon=use_lon,
+                address=addr if use_lat is None else None,
+                property_type=property_type or "buy_building",
+                tiv=tiv_f,
+                include_simulation=bool(include_sim and "sim" in include_sim),
+            )
+        except ValueError as e:
+            return html.Div(
+                className="catia-flash catia-flash--warn",
+                children=[html.P(str(e), className="catia-flash__text")],
+            )
+        except Exception as e:
+            logger.exception("Site assessment failed")
+            return html.Div(
+                className="catia-flash catia-flash--warn",
+                children=[html.P(f"Assessment failed: {e}", className="catia-flash__text")],
+            )
+        return build_site_assessment_panel(result)
 
     @app.callback(
         Output("live-feed-store", "data"),

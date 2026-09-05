@@ -592,6 +592,62 @@ a.catia-link:hover {
   min-height: 200px;
 }
 
+.catia-site-input {
+  width: 100%;
+  min-height: 40px;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  border: 1px solid var(--wx-line, rgba(56, 189, 248, 0.35));
+  border-radius: 9px;
+  background: rgba(2, 10, 17, 0.76);
+  color: var(--wx-text, #e2e8f0);
+  font-size: 0.9rem;
+}
+
+.catia-site-input--wide {
+  min-width: 220px;
+}
+
+.catia-site-check {
+  color: var(--wx-muted, #94a3b8);
+  font-size: 0.85rem;
+}
+
+.catia-risk-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  color: #e2e8f0;
+}
+
+.catia-risk-badge--low {
+  border-color: rgba(52, 211, 153, 0.45);
+  background: rgba(16, 185, 129, 0.18);
+  color: #6ee7b7;
+}
+
+.catia-risk-badge--moderate {
+  border-color: rgba(251, 191, 36, 0.45);
+  background: rgba(245, 158, 11, 0.16);
+  color: #fcd34d;
+}
+
+.catia-risk-badge--high {
+  border-color: rgba(251, 146, 60, 0.5);
+  background: rgba(249, 115, 22, 0.18);
+  color: #fdba74;
+}
+
+.catia-risk-badge--severe {
+  border-color: rgba(248, 113, 113, 0.55);
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+}
+
 /* Legacy react-select (older Dash) — keep as fallback */
 .catia-dash-dropdown .Select-control {
   background-color: rgba(7, 11, 20, 0.88) !important;

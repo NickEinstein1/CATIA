@@ -282,6 +282,133 @@ OUTPUT_CONFIG = {
 }
 
 # ============================================================================
+# SITE VIABILITY (property / land screening for actuarial analytics)
+# ============================================================================
+# Indicative only — not binding underwriting. Scores map regional peril config,
+# topography stubs, and property-type modifiers into risk categories.
+
+SITE_VIABILITY_CONFIG = {
+    "score_thresholds": {
+        "moderate": 35.0,
+        "high": 55.0,
+        "severe": 75.0,
+    },
+    "indicative_iterations": 2000,
+    # Real DEM / floodplain (USGS EPQS, Open-Meteo, FEMA NFHL). Set CATIA_SITE_TOPO=0 to force stub.
+    "topo_providers_default": True,
+    "default_tiv": {
+        "buy_land": 250_000.0,
+        "build": 750_000.0,
+        "buy_building": 500_000.0,
+    },
+    # Relative vulnerability multipliers by property intent × peril
+    "property_type_modifiers": {
+        "buy_land": {
+            "hurricane": 0.75,
+            "flood": 1.15,
+            "wildfire": 0.85,
+            "earthquake": 0.55,
+            "drought": 1.05,
+        },
+        "build": {
+            "hurricane": 1.15,
+            "flood": 1.20,
+            "wildfire": 1.10,
+            "earthquake": 1.25,
+            "drought": 0.90,
+        },
+        "buy_building": {
+            "hurricane": 1.05,
+            "flood": 1.10,
+            "wildfire": 1.05,
+            "earthquake": 1.15,
+            "drought": 0.85,
+        },
+    },
+    "property_guidance": {
+        "buy_land": [
+            "Confirm floodplain / wetland overlays and future land-use restrictions.",
+            "Price residual catastrophe risk into acquisition and entitlement costs.",
+            "Check access, elevation, and drainage before locking construction plans.",
+        ],
+        "build": [
+            "Design for site-dominant perils (wind, flood elevation, seismic detailing).",
+            "Obtain hazard-aware construction standards and insurer-preferred materials.",
+            "Budget mitigation (elevation, hardening, defensible space) early.",
+        ],
+        "buy_building": [
+            "Review construction year, roof, foundation, and prior claims history.",
+            "Align deductible / limit structure with regional peril severity.",
+            "Validate that retrofit options improve insurability and residual risk.",
+        ],
+    },
+    "peril_guidance": {
+        "hurricane": "Coastal wind/storm-surge screening; consider wind mitigation credits.",
+        "flood": "Elevation and drainage matter more than regional averages for flood.",
+        "wildfire": "Vegetation, slope, and access routes drive wildfire insurability.",
+        "earthquake": "Seismic zone + construction class dominate earthquake residual risk.",
+        "drought": "Water supply and wildfire coupling can affect long-horizon land value.",
+    },
+    "insurance_viability": {
+        "low": {
+            "status": "favorable",
+            "label": "Favorable screening",
+            "narrative": (
+                "Regional peril load and topography stubs suggest relatively manageable "
+                "catastrophe exposure for screening purposes."
+            ),
+            "reinsurance_notes": "Standard facultative / treaty interest likely; monitor accumulation.",
+            "suggested_actions": [
+                "Proceed with standard hazard due diligence",
+                "Document assumptions in the underwriting file",
+            ],
+        },
+        "moderate": {
+            "status": "conditional",
+            "label": "Conditional — mitigation recommended",
+            "narrative": (
+                "Material regional hazards are present. Viability improves with mitigation, "
+                "structure design, and deductible/limit discipline."
+            ),
+            "reinsurance_notes": "Expect conditions, higher retentions, or peril sublimits.",
+            "suggested_actions": [
+                "Quantify AAL / VaR with site TIV",
+                "Prioritize peril-specific mitigation",
+                "Stress under climate scenario",
+            ],
+        },
+        "high": {
+            "status": "challenged",
+            "label": "Challenged insurability",
+            "narrative": (
+                "High multi-peril or topography-amplified risk. Insurance capacity may be "
+                "limited or expensive without strong mitigation and capital planning."
+            ),
+            "reinsurance_notes": "Specialty markets / higher attachment points may be required.",
+            "suggested_actions": [
+                "Run full CATIA regional analysis",
+                "Engage hazard engineers for elevation / seismic review",
+                "Model reinsurance cost vs risk transfer",
+            ],
+        },
+        "severe": {
+            "status": "highly_challenged",
+            "label": "Highly challenged — revisit decision",
+            "narrative": (
+                "Severe concentrated catastrophe profile for this topography and property "
+                "intent. Acquisition or construction may be uneconomic without extraordinary mitigation."
+            ),
+            "reinsurance_notes": "Limited appetite; residual risk retention and capital charges likely high.",
+            "suggested_actions": [
+                "Reconsider site selection or land-use plan",
+                "Require independent hazard studies",
+                "Escalate to actuarial / reinsurance pricing",
+            ],
+        },
+    },
+}
+
+# ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
 
@@ -296,7 +423,8 @@ def get_config(section: str) -> Dict[str, Any]:
         "data": DATA_CONFIG,
         "logging": LOGGING_CONFIG,
         "output": OUTPUT_CONFIG,
-        "peril": PERIL_CONFIG
+        "peril": PERIL_CONFIG,
+        "site_viability": SITE_VIABILITY_CONFIG,
     }
     return config_map.get(section, {})
 
