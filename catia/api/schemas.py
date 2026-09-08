@@ -404,3 +404,91 @@ class SiteAssessResponse(BaseModel):
     disclaimer: str
     model_config = {"extra": "allow"}
 
+
+# ============================================================================
+# PORTFOLIO ACCUMULATION
+# ============================================================================
+
+class PortfolioLocationIn(BaseModel):
+    """Single portfolio location (lat/lon + TIV)."""
+    lat: float = Field(..., ge=-90, le=90)
+    lon: float = Field(..., ge=-180, le=180)
+    tiv: float = Field(..., gt=0, description="Total insured value (USD)")
+    id: Optional[str] = None
+    construction_type: Optional[str] = None
+    occupancy: Optional[str] = None
+    property_type: Optional[str] = None
+    flood_zone: Optional[str] = Field(default=None, description="Optional FEMA zone override")
+    region: Optional[str] = Field(default=None, description="Optional CATIA region override")
+
+
+class PortfolioOneStormSpec(BaseModel):
+    """Deterministic single-storm shock on the book."""
+    peril: PerilType = PerilType.HURRICANE
+    intensity: float = Field(
+        default=120.0,
+        description="Hazard intensity (e.g. wind mph, flood depth ft — peril-specific)",
+    )
+    mode: str = Field(default="region", description="region | radius")
+    region_id: Optional[str] = None
+    center_lat: Optional[float] = None
+    center_lon: Optional[float] = None
+    radius_km: float = Field(default=250.0, gt=0)
+
+
+class PortfolioAccumulateRequest(BaseModel):
+    """Accumulate AAL/VaR across many locations; optional one-storm shock."""
+    locations: Optional[List[PortfolioLocationIn]] = Field(
+        default=None,
+        max_length=2000,
+        description="Explicit location list (max 2000)",
+    )
+    csv_text: Optional[str] = Field(
+        default=None,
+        max_length=2_000_000,
+        description="CSV with lat,lon,tiv headers",
+    )
+    geojson: Optional[Dict[str, Any]] = Field(default=None, description="GeoJSON FeatureCollection")
+    perils: List[PerilType] = Field(
+        default=[PerilType.HURRICANE, PerilType.FLOOD, PerilType.WILDFIRE, PerilType.EARTHQUAKE],
+    )
+    num_iterations: Optional[int] = Field(default=None, ge=100, le=5000)
+    scenario_id: Optional[str] = None
+    include_fema: bool = Field(
+        default=False,
+        description="Fetch FEMA flood zones per location (slower; US only; capped)",
+    )
+    group_by: List[str] = Field(default=["region", "flood_zone"])
+    run_simulation: bool = True
+    one_storm: Optional[PortfolioOneStormSpec] = None
+
+
+class PortfolioAccumulateResponse(BaseModel):
+    """Portfolio accumulation analysis response."""
+    analyzed_at: str
+    summary: Dict[str, Any]
+    locations: List[Dict[str, Any]] = Field(default_factory=list)
+    perils: List[str] = Field(default_factory=list)
+    book: Optional[Dict[str, Any]] = None
+    by_region: Optional[List[Dict[str, Any]]] = None
+    by_flood_zone: Optional[List[Dict[str, Any]]] = None
+    one_storm: Optional[Dict[str, Any]] = None
+    include_fema: bool = False
+    disclaimer: str
+    model_config = {"extra": "allow"}
+
+
+class PortfolioOneStormRequest(BaseModel):
+    """Standalone one-storm scenario on provided locations."""
+    locations: Optional[List[PortfolioLocationIn]] = Field(default=None, max_length=2000)
+    csv_text: Optional[str] = Field(default=None, max_length=2_000_000)
+    geojson: Optional[Dict[str, Any]] = None
+    include_fema: bool = False
+    peril: PerilType = PerilType.HURRICANE
+    intensity: float = 120.0
+    mode: str = "region"
+    region_id: Optional[str] = None
+    center_lat: Optional[float] = None
+    center_lon: Optional[float] = None
+    radius_km: float = 250.0
+

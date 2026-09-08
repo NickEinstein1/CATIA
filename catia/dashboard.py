@@ -38,8 +38,10 @@ from catia.live_catastrophe_feeds import LiveFeedResult, category_color
 from catia.live_compliance import attribution_footer
 from catia.dashboard_live import build_live_earth_content
 from catia.dashboard_site import build_site_assessment_panel
+from catia.dashboard_portfolio import build_portfolio_panel
 from catia.live_service import fetch_live_events_base
 from catia.site_viability import assess_site_viability
+from catia.portfolio_accumulation import analyze_portfolio
 
 logger = logging.getLogger(__name__)
 
@@ -649,12 +651,181 @@ def create_dash_app(
                     dcc.Tab(label="01  Global", value="tab-globe"),
                     dcc.Tab(label="02  Live Earth", value="tab-live"),
                     dcc.Tab(label="03  Site Assess", value="tab-site"),
-                    dcc.Tab(label="04  Overview", value="tab-overview"),
-                    dcc.Tab(label="05  Latest Run", value="tab-run"),
-                    dcc.Tab(label="06  Analytics", value="tab-charts"),
-                    dcc.Tab(label="07  Scenarios", value="tab-perils"),
-                    dcc.Tab(label="08  Assumptions", value="tab-assumptions"),
-                    dcc.Tab(label="09  System", value="tab-api"),
+                    dcc.Tab(label="04  Portfolio", value="tab-portfolio"),
+                    dcc.Tab(label="05  Overview", value="tab-overview"),
+                    dcc.Tab(label="06  Latest Run", value="tab-run"),
+                    dcc.Tab(label="07  Analytics", value="tab-charts"),
+                    dcc.Tab(label="08  Scenarios", value="tab-perils"),
+                    dcc.Tab(label="09  Assumptions", value="tab-assumptions"),
+                    dcc.Tab(label="10  System", value="tab-api"),
+                ],
+            ),
+            html.Div(
+                id="portfolio-toolbar",
+                className="catia-live-toolbar",
+                style={"display": "none"},
+                children=[
+                    html.Div(
+                        className="catia-live-toolbar__header",
+                        children=[
+                            html.Span(
+                                "Portfolio accumulation",
+                                className="catia-live-toolbar__title",
+                            ),
+                            html.Span(
+                                "Upload many locations (CSV/GeoJSON). Roll up AAL/VaR by peril, "
+                                "region, and flood zone — plus an optional one-storm book shock.",
+                                className="catia-live-toolbar__hint",
+                            ),
+                        ],
+                    ),
+                    html.Div(
+                        className="catia-live-toolbar__grid",
+                        children=[
+                            html.Div(
+                                className="catia-live-toolbar__field catia-live-toolbar__field--wide",
+                                children=[
+                                    html.Label("Upload CSV or GeoJSON", className="catia-live-toolbar__label"),
+                                    dcc.Upload(
+                                        id="portfolio-upload",
+                                        children=html.Div("Drag & drop or click to select file"),
+                                        className="catia-upload-zone",
+                                        multiple=False,
+                                    ),
+                                    html.Div(id="portfolio-upload-name", className="catia-footnote"),
+                                ],
+                            ),
+                            html.Div(
+                                className="catia-live-toolbar__field",
+                                children=[
+                                    html.Label("MC iterations", className="catia-live-toolbar__label"),
+                                    dcc.Input(
+                                        id="portfolio-iterations",
+                                        type="number",
+                                        value=1000,
+                                        min=100,
+                                        max=10000,
+                                        step=100,
+                                        className="catia-site-input",
+                                    ),
+                                ],
+                            ),
+                            html.Div(
+                                className="catia-live-toolbar__field",
+                                children=[
+                                    html.Label("One-storm peril", className="catia-live-toolbar__label"),
+                                    dcc.Dropdown(
+                                        id="portfolio-storm-peril",
+                                        options=[
+                                            {"label": "Hurricane", "value": "hurricane"},
+                                            {"label": "Flood", "value": "flood"},
+                                            {"label": "Wildfire", "value": "wildfire"},
+                                            {"label": "Earthquake", "value": "earthquake"},
+                                        ],
+                                        value="hurricane",
+                                        clearable=False,
+                                        className="catia-dash-dropdown",
+                                    ),
+                                ],
+                            ),
+                            html.Div(
+                                className="catia-live-toolbar__field",
+                                children=[
+                                    html.Label("Storm intensity", className="catia-live-toolbar__label"),
+                                    dcc.Input(
+                                        id="portfolio-storm-intensity",
+                                        type="number",
+                                        value=130,
+                                        className="catia-site-input",
+                                    ),
+                                ],
+                            ),
+                        ],
+                    ),
+                    html.Div(
+                        className="catia-live-toolbar__row2",
+                        children=[
+                            html.Div(
+                                className="catia-live-toolbar__field",
+                                children=[
+                                    html.Label("Storm mode", className="catia-live-toolbar__label"),
+                                    dcc.Dropdown(
+                                        id="portfolio-storm-mode",
+                                        options=[
+                                            {"label": "By region", "value": "region"},
+                                            {"label": "By radius (km)", "value": "radius"},
+                                        ],
+                                        value="region",
+                                        clearable=False,
+                                        className="catia-dash-dropdown",
+                                    ),
+                                ],
+                            ),
+                            html.Div(
+                                className="catia-live-toolbar__field",
+                                children=[
+                                    html.Label("Storm region id", className="catia-live-toolbar__label"),
+                                    dcc.Input(
+                                        id="portfolio-storm-region",
+                                        type="text",
+                                        value="US_Gulf_Coast",
+                                        className="catia-site-input",
+                                    ),
+                                ],
+                            ),
+                            html.Div(
+                                className="catia-live-toolbar__field",
+                                children=[
+                                    html.Label("Radius center lat / lon / km", className="catia-live-toolbar__label"),
+                                    html.Div(
+                                        style={"display": "flex", "gap": "6px"},
+                                        children=[
+                                            dcc.Input(
+                                                id="portfolio-storm-clat",
+                                                type="number",
+                                                value=29.95,
+                                                className="catia-site-input",
+                                            ),
+                                            dcc.Input(
+                                                id="portfolio-storm-clon",
+                                                type="number",
+                                                value=-90.07,
+                                                className="catia-site-input",
+                                            ),
+                                            dcc.Input(
+                                                id="portfolio-storm-radius",
+                                                type="number",
+                                                value=300,
+                                                className="catia-site-input",
+                                            ),
+                                        ],
+                                    ),
+                                ],
+                            ),
+                            html.Div(
+                                className="catia-live-toolbar__actions",
+                                children=[
+                                    dcc.Checklist(
+                                        id="portfolio-options",
+                                        options=[
+                                            {"label": " Include FEMA zones", "value": "fema"},
+                                            {"label": " Run one-storm shock", "value": "storm"},
+                                        ],
+                                        value=["storm"],
+                                        className="catia-site-check",
+                                    ),
+                                    html.Button(
+                                        "Accumulate portfolio",
+                                        id="portfolio-run-btn",
+                                        type="button",
+                                        n_clicks=0,
+                                        className="catia-btn",
+                                    ),
+                                ],
+                            ),
+                        ],
+                    ),
+                    dcc.Store(id="portfolio-file-store", storage_type="memory"),
                 ],
             ),
             html.Div(
@@ -954,20 +1125,17 @@ def create_dash_app(
     @app.callback(
         Output("live-toolbar", "style"),
         Output("site-toolbar", "style"),
+        Output("portfolio-toolbar", "style"),
         Input("dash-tabs", "value"),
     )
     def toggle_toolbars(active: str):
-        live_style = (
-            {"display": "block", "marginTop": "12px", "marginBottom": "4px"}
-            if active == "tab-live"
-            else {"display": "none"}
+        shown = {"display": "block", "marginTop": "12px", "marginBottom": "4px"}
+        hidden = {"display": "none"}
+        return (
+            shown if active == "tab-live" else hidden,
+            shown if active == "tab-site" else hidden,
+            shown if active == "tab-portfolio" else hidden,
         )
-        site_style = (
-            {"display": "block", "marginTop": "12px", "marginBottom": "4px"}
-            if active == "tab-site"
-            else {"display": "none"}
-        )
-        return live_style, site_style
 
     @app.callback(
         Output("tab-content", "children"),
@@ -1074,6 +1242,13 @@ def create_dash_app(
                 id="site-tab-content",
                 className="catia-live-tab-body",
                 children=build_site_assessment_panel(None),
+            )
+
+        if active == "tab-portfolio":
+            return html.Div(
+                id="portfolio-tab-content",
+                className="catia-live-tab-body",
+                children=build_portfolio_panel(None),
             )
 
         if active == "tab-overview":
@@ -1294,6 +1469,121 @@ def create_dash_app(
                 children=[html.P(f"Assessment failed: {e}", className="catia-flash__text")],
             )
         return build_site_assessment_panel(result)
+
+    @app.callback(
+        Output("portfolio-file-store", "data"),
+        Output("portfolio-upload-name", "children"),
+        Input("portfolio-upload", "contents"),
+        State("portfolio-upload", "filename"),
+        prevent_initial_call=True,
+    )
+    def store_portfolio_upload(contents: Optional[str], filename: Optional[str]):
+        if not contents:
+            raise PreventUpdate
+        try:
+            meta = str(contents).split(",", 1)[1]
+            raw = base64.b64decode(meta)
+            text = raw.decode("utf-8")
+        except Exception:
+            return None, "Could not read upload (expect UTF-8 CSV or GeoJSON)."
+        name = filename or "upload"
+        lower = name.lower()
+        if lower.endswith((".geojson", ".json")):
+            try:
+                geo = json.loads(text)
+            except json.JSONDecodeError:
+                return None, f"{name}: invalid JSON"
+            return {"kind": "geojson", "geojson": geo, "filename": name}, f"Loaded {name}"
+        return {"kind": "csv", "csv_text": text, "filename": name}, f"Loaded {name}"
+
+    @app.callback(
+        Output("portfolio-tab-content", "children"),
+        Input("portfolio-run-btn", "n_clicks"),
+        Input("dash-tabs", "value"),
+        State("portfolio-file-store", "data"),
+        State("portfolio-iterations", "value"),
+        State("portfolio-options", "value"),
+        State("portfolio-storm-peril", "value"),
+        State("portfolio-storm-intensity", "value"),
+        State("portfolio-storm-mode", "value"),
+        State("portfolio-storm-region", "value"),
+        State("portfolio-storm-clat", "value"),
+        State("portfolio-storm-clon", "value"),
+        State("portfolio-storm-radius", "value"),
+        prevent_initial_call=False,
+    )
+    def render_portfolio_tab(
+        n_clicks: Optional[int],
+        active: str,
+        file_store: Optional[Dict[str, Any]],
+        iterations: Optional[Any],
+        options: Optional[List[str]],
+        storm_peril: Optional[str],
+        storm_intensity: Optional[Any],
+        storm_mode: Optional[str],
+        storm_region: Optional[str],
+        storm_clat: Optional[Any],
+        storm_clon: Optional[Any],
+        storm_radius: Optional[Any],
+    ):
+        if active != "tab-portfolio":
+            raise PreventUpdate
+        triggered = ""
+        if callback_context.triggered:
+            triggered = callback_context.triggered[0]["prop_id"].split(".")[0]
+        if triggered == "dash-tabs" and not n_clicks:
+            return build_portfolio_panel(None)
+        if not n_clicks and triggered != "portfolio-run-btn":
+            return build_portfolio_panel(None)
+        if not file_store:
+            return html.Div(
+                className="catia-flash catia-flash--warn",
+                children=[
+                    html.P(
+                        "Upload a CSV or GeoJSON first (lat, lon, tiv).",
+                        className="catia-flash__text",
+                    )
+                ],
+            )
+        opts = options or []
+        include_fema = "fema" in opts
+        one_storm = None
+        if "storm" in opts:
+            one_storm = {
+                "peril": storm_peril or "hurricane",
+                "intensity": float(storm_intensity or 120),
+                "mode": storm_mode or "region",
+                "region_id": (storm_region or "").strip() or None,
+                "center_lat": float(storm_clat) if storm_clat is not None else None,
+                "center_lon": float(storm_clon) if storm_clon is not None else None,
+                "radius_km": float(storm_radius or 250),
+            }
+        try:
+            n_iter = int(iterations) if iterations is not None else 1000
+            n_iter = max(100, min(10000, n_iter))
+            kwargs: Dict[str, Any] = {
+                "include_fema": include_fema,
+                "num_iterations": n_iter,
+                "run_simulation": True,
+                "one_storm": one_storm,
+            }
+            if file_store.get("kind") == "geojson":
+                kwargs["geojson"] = file_store.get("geojson")
+            else:
+                kwargs["csv_text"] = file_store.get("csv_text")
+            result = analyze_portfolio(**kwargs)
+        except ValueError as e:
+            return html.Div(
+                className="catia-flash catia-flash--warn",
+                children=[html.P(str(e), className="catia-flash__text")],
+            )
+        except Exception as e:
+            logger.exception("Portfolio accumulation failed")
+            return html.Div(
+                className="catia-flash catia-flash--warn",
+                children=[html.P(f"Accumulation failed: {e}", className="catia-flash__text")],
+            )
+        return build_portfolio_panel(result)
 
     @app.callback(
         Output("live-feed-store", "data"),

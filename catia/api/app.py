@@ -28,6 +28,7 @@ from catia.api.routes import (
 )
 from catia.api.live_routes import live_router
 from catia.api.site_routes import site_router
+from catia.api.portfolio_routes import portfolio_router
 from catia.api.middleware import RequestIDMiddleware, RateLimitMiddleware
 from catia.api.schemas import ErrorResponse
 
@@ -189,6 +190,7 @@ app.include_router(simulation_router, prefix="/api/v1")
 app.include_router(mitigation_router, prefix="/api/v1")
 app.include_router(live_router, prefix="/api/v1")
 app.include_router(site_router, prefix="/api/v1")
+app.include_router(portfolio_router, prefix="/api/v1")
 
 
 @app.get("/", tags=["Root"])
@@ -201,6 +203,7 @@ async def root():
         "health": "/api/v1/health",
         "ready": "/api/v1/ready",
         "site_assess": "/api/v1/site/assess",
+        "portfolio_accumulate": "/api/v1/portfolio/accumulate",
     }
 
 

@@ -18,6 +18,9 @@ RATE_LIMIT_RULES = [
     ("/api/v1/analysis/run", "POST"),
     ("/api/v1/analysis/jobs", "POST"),
     ("/api/v1/simulation/run", "POST"),
+    ("/api/v1/portfolio/accumulate", "POST"),
+    ("/api/v1/portfolio/resolve", "POST"),
+    ("/api/v1/portfolio/one-storm", "POST"),
 ]
 RATE_LIMIT_MAX_REQUESTS = 60
 RATE_LIMIT_WINDOW_SECONDS = 60
