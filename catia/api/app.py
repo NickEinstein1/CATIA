@@ -204,6 +204,8 @@ async def root():
         "ready": "/api/v1/ready",
         "site_assess": "/api/v1/site/assess",
         "portfolio_accumulate": "/api/v1/portfolio/accumulate",
+        "portfolio_live_hit": "/api/v1/portfolio/live-hit",
+        "portfolio_export": "/api/v1/portfolio/export",
     }
 
 

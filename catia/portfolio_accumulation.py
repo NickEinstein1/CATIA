@@ -13,7 +13,12 @@ from typing import Any, Dict, List, Literal, Optional
 
 from catia.config import DEFAULT_PERILS, SITE_VIABILITY_CONFIG
 from catia.exposure import ExposureStore
-from catia.financial_impact import MultiPerilSimulator, run_exposure_based_simulation
+from catia.financial_impact import (
+    FinancialImpactSimulator,
+    MultiPerilSimulator,
+    run_exposure_based_simulation,
+)
+from catia.live_portfolio import live_event_to_one_storm
 from catia.portfolio import (
     DISCLAIMER,
     PortfolioLocation,
@@ -21,6 +26,7 @@ from catia.portfolio import (
     portfolio_summary,
     resolve_portfolio_locations,
 )
+from catia.reinsurance import apply_layers_to_loss, apply_layers_to_losses, parse_layers
 from catia.site_geo import haversine_km
 from catia.vulnerability import VulnerabilitySet
 
@@ -74,6 +80,7 @@ def _run_book_simulation(
     perils: List[str],
     num_iterations: int,
     scenario_id: Optional[str] = None,
+    reinsurance_layers: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     if not locations:
         return {"aggregate": {}, "by_peril": {}, "contributions": []}
@@ -96,13 +103,29 @@ def _run_book_simulation(
             "name": blob.get("name", p),
             **_metrics_brief(blob.get("metrics") or {}),
         }
-    return {
+    out: Dict[str, Any] = {
         "aggregate": _metrics_brief((results.get("aggregate") or {}).get("metrics") or {}),
         "by_peril": by_peril,
         "contributions": contributions,
         "iterations": num_iterations,
         "scenario_id": scenario_id or "baseline",
     }
+    layers = parse_layers(reinsurance_layers)
+    if layers:
+        gross = (results.get("aggregate") or {}).get("losses")
+        if gross is not None:
+            applied = apply_layers_to_losses(gross, layers)
+            metric_sim = FinancialImpactSimulator(1.0, {"mu": 15, "sigma": 2})
+            out["aggregate_net"] = _metrics_brief(
+                metric_sim.calculate_aggregate_metrics(applied["net_losses"])
+            )
+            out["reinsurance"] = {
+                "mean_gross": applied["mean_gross"],
+                "mean_recovered": applied["mean_recovered"],
+                "mean_net": applied["mean_net"],
+                "layers": applied["layer_means"],
+            }
+    return out
 
 
 def _group_key(loc: PortfolioLocation, group_by: GroupBy) -> str:
@@ -252,9 +275,14 @@ def analyze_portfolio(
     group_by: Optional[List[str]] = None,
     run_simulation: bool = True,
     one_storm: Optional[Dict[str, Any]] = None,
+    live_event: Optional[Dict[str, Any]] = None,
+    reinsurance_layers: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """
     End-to-end portfolio accumulation payload for API and dashboard.
+
+    Optional ``live_event`` maps a feed event onto a radius one-storm shock.
+    Optional ``reinsurance_layers`` produce net-of-XL book metrics and storm recoveries.
     """
     raw = parse_portfolio_payload(locations=locations, csv_text=csv_text, geojson=geojson)
     resolved = resolve_portfolio_locations(raw, include_fema=include_fema)
@@ -270,6 +298,18 @@ def analyze_portfolio(
     if len(resolved) > 200:
         n_iter = min(n_iter, 1500)
 
+    layers = parse_layers(reinsurance_layers)
+    layer_dicts = [L.to_dict() for L in layers]
+
+    storm_spec = one_storm
+    if live_event and not storm_spec:
+        storm_spec = live_event_to_one_storm(live_event)
+    elif live_event and storm_spec:
+        # Fill missing radius fields from live event
+        mapped = live_event_to_one_storm(live_event)
+        merged = {**mapped, **{k: v for k, v in storm_spec.items() if v is not None}}
+        storm_spec = merged
+
     groups = group_by or ["region", "flood_zone"]
     book_sim = None
     by_region = None
@@ -280,6 +320,7 @@ def analyze_portfolio(
             perils=peril_list,
             num_iterations=n_iter,
             scenario_id=scenario_id,
+            reinsurance_layers=layer_dicts or None,
         )
         if "region" in groups:
             by_region = _run_sliced(
@@ -290,7 +331,6 @@ def analyze_portfolio(
                 scenario_id=scenario_id,
             )
         if "flood_zone" in groups:
-            # Only meaningful when zones known; still run for unknown bucket
             by_flood_zone = _run_sliced(
                 resolved,
                 group_by="flood_zone",
@@ -300,17 +340,29 @@ def analyze_portfolio(
             )
 
     storm = None
-    if one_storm:
+    if storm_spec:
         storm = one_storm_scenario(
             resolved,
-            peril=str(one_storm.get("peril") or "hurricane"),
-            intensity=float(one_storm.get("intensity") or 120),
-            mode=str(one_storm.get("mode") or "region"),  # type: ignore[arg-type]
-            region_id=one_storm.get("region_id"),
-            center_lat=one_storm.get("center_lat"),
-            center_lon=one_storm.get("center_lon"),
-            radius_km=float(one_storm.get("radius_km") or 250),
+            peril=str(storm_spec.get("peril") or "hurricane"),
+            intensity=float(storm_spec.get("intensity") or 120),
+            mode=str(storm_spec.get("mode") or "region"),  # type: ignore[arg-type]
+            region_id=storm_spec.get("region_id"),
+            center_lat=storm_spec.get("center_lat"),
+            center_lon=storm_spec.get("center_lon"),
+            radius_km=float(storm_spec.get("radius_km") or 250),
         )
+        for key in (
+            "live_event_id",
+            "live_event_title",
+            "live_event_source",
+            "intensity_source",
+        ):
+            if storm_spec.get(key) is not None:
+                storm[key] = storm_spec.get(key)
+        if storm_spec.get("note"):
+            storm["note"] = storm_spec["note"]
+        if layers:
+            storm["reinsurance"] = apply_layers_to_loss(float(storm["total_loss"]), layers)
 
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     loc_dicts = [loc.to_dict() for loc in resolved]
@@ -328,6 +380,7 @@ def analyze_portfolio(
         "by_region": by_region,
         "by_flood_zone": by_flood_zone,
         "one_storm": storm,
+        "reinsurance_layers": layer_dicts,
         "include_fema": include_fema,
         "disclaimer": DISCLAIMER,
     }

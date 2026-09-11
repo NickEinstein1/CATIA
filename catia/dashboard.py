@@ -810,6 +810,8 @@ def create_dash_app(
                                         options=[
                                             {"label": " Include FEMA zones", "value": "fema"},
                                             {"label": " Run one-storm shock", "value": "storm"},
+                                            {"label": " Apply live event", "value": "live"},
+                                            {"label": " Apply XL layer", "value": "xl"},
                                         ],
                                         value=["storm"],
                                         className="catia-site-check",
@@ -821,11 +823,69 @@ def create_dash_app(
                                         n_clicks=0,
                                         className="catia-btn",
                                     ),
+                                    html.Button(
+                                        "Download pack",
+                                        id="portfolio-export-btn",
+                                        type="button",
+                                        n_clicks=0,
+                                        className="catia-btn catia-btn--ghost",
+                                    ),
+                                    dcc.Download(id="portfolio-export-download"),
+                                ],
+                            ),
+                        ],
+                    ),
+                    html.Div(
+                        className="catia-live-toolbar__row2",
+                        children=[
+                            html.Div(
+                                className="catia-live-toolbar__field catia-live-toolbar__field--wide",
+                                children=[
+                                    html.Label("Live event (from feed cache)", className="catia-live-toolbar__label"),
+                                    dcc.Dropdown(
+                                        id="portfolio-live-event",
+                                        options=[],
+                                        placeholder="Open Live Earth once, or accumulate will refresh options",
+                                        className="catia-dash-dropdown",
+                                    ),
+                                ],
+                            ),
+                            html.Div(
+                                className="catia-live-toolbar__field",
+                                children=[
+                                    html.Label("XL attach / limit / share", className="catia-live-toolbar__label"),
+                                    html.Div(
+                                        style={"display": "flex", "gap": "6px"},
+                                        children=[
+                                            dcc.Input(
+                                                id="portfolio-xl-attach",
+                                                type="number",
+                                                value=1_000_000,
+                                                className="catia-site-input",
+                                            ),
+                                            dcc.Input(
+                                                id="portfolio-xl-limit",
+                                                type="number",
+                                                value=5_000_000,
+                                                className="catia-site-input",
+                                            ),
+                                            dcc.Input(
+                                                id="portfolio-xl-share",
+                                                type="number",
+                                                value=1.0,
+                                                min=0.01,
+                                                max=1.0,
+                                                step=0.05,
+                                                className="catia-site-input",
+                                            ),
+                                        ],
+                                    ),
                                 ],
                             ),
                         ],
                     ),
                     dcc.Store(id="portfolio-file-store", storage_type="memory"),
+                    dcc.Store(id="portfolio-result-store", storage_type="memory"),
                 ],
             ),
             html.Div(
@@ -1497,7 +1557,33 @@ def create_dash_app(
         return {"kind": "csv", "csv_text": text, "filename": name}, f"Loaded {name}"
 
     @app.callback(
+        Output("portfolio-live-event", "options"),
+        Input("dash-tabs", "value"),
+        Input("live-feed-store", "data"),
+        prevent_initial_call=False,
+    )
+    def portfolio_live_event_options(active: str, live_store: Optional[Dict[str, Any]]):
+        if active != "tab-portfolio":
+            raise PreventUpdate
+        events = list((live_store or {}).get("events") or [])
+        if not events:
+            try:
+                events = list((fetch_live_events_base(force=False) or {}).get("events") or [])
+            except Exception:
+                events = []
+        opts = []
+        for ev in events[:80]:
+            eid = ev.get("id")
+            if not eid:
+                continue
+            title = str(ev.get("title") or eid)[:80]
+            src = ev.get("source") or ""
+            opts.append({"label": f"{title} ({src})", "value": str(eid)})
+        return opts
+
+    @app.callback(
         Output("portfolio-tab-content", "children"),
+        Output("portfolio-result-store", "data"),
         Input("portfolio-run-btn", "n_clicks"),
         Input("dash-tabs", "value"),
         State("portfolio-file-store", "data"),
@@ -1510,6 +1596,11 @@ def create_dash_app(
         State("portfolio-storm-clat", "value"),
         State("portfolio-storm-clon", "value"),
         State("portfolio-storm-radius", "value"),
+        State("portfolio-live-event", "value"),
+        State("live-feed-store", "data"),
+        State("portfolio-xl-attach", "value"),
+        State("portfolio-xl-limit", "value"),
+        State("portfolio-xl-share", "value"),
         prevent_initial_call=False,
     )
     def render_portfolio_tab(
@@ -1525,18 +1616,24 @@ def create_dash_app(
         storm_clat: Optional[Any],
         storm_clon: Optional[Any],
         storm_radius: Optional[Any],
+        live_event_id: Optional[str],
+        live_store: Optional[Dict[str, Any]],
+        xl_attach: Optional[Any],
+        xl_limit: Optional[Any],
+        xl_share: Optional[Any],
     ):
         if active != "tab-portfolio":
             raise PreventUpdate
         triggered = ""
         if callback_context.triggered:
             triggered = callback_context.triggered[0]["prop_id"].split(".")[0]
+        empty = build_portfolio_panel(None)
         if triggered == "dash-tabs" and not n_clicks:
-            return build_portfolio_panel(None)
+            return empty, None
         if not n_clicks and triggered != "portfolio-run-btn":
-            return build_portfolio_panel(None)
+            return empty, None
         if not file_store:
-            return html.Div(
+            warn = html.Div(
                 className="catia-flash catia-flash--warn",
                 children=[
                     html.P(
@@ -1545,10 +1642,31 @@ def create_dash_app(
                     )
                 ],
             )
+            return warn, None
         opts = options or []
         include_fema = "fema" in opts
         one_storm = None
-        if "storm" in opts:
+        live_event = None
+        if "live" in opts and live_event_id:
+            events = list((live_store or {}).get("events") or [])
+            if not events:
+                try:
+                    events = list((fetch_live_events_base(force=False) or {}).get("events") or [])
+                except Exception:
+                    events = []
+            from catia.live_portfolio import find_live_event
+
+            try:
+                live_event = find_live_event(events, str(live_event_id))
+            except ValueError as e:
+                return (
+                    html.Div(
+                        className="catia-flash catia-flash--warn",
+                        children=[html.P(str(e), className="catia-flash__text")],
+                    ),
+                    None,
+                )
+        elif "storm" in opts:
             one_storm = {
                 "peril": storm_peril or "hurricane",
                 "intensity": float(storm_intensity or 120),
@@ -1558,14 +1676,35 @@ def create_dash_app(
                 "center_lon": float(storm_clon) if storm_clon is not None else None,
                 "radius_km": float(storm_radius or 250),
             }
+        reinsurance_layers = None
+        if "xl" in opts:
+            try:
+                reinsurance_layers = [
+                    {
+                        "name": "XL-1",
+                        "attachment": float(xl_attach or 0),
+                        "limit": float(xl_limit or 1),
+                        "share": float(xl_share if xl_share is not None else 1.0),
+                    }
+                ]
+            except (TypeError, ValueError):
+                return (
+                    html.Div(
+                        className="catia-flash catia-flash--warn",
+                        children=[html.P("Invalid XL layer inputs.", className="catia-flash__text")],
+                    ),
+                    None,
+                )
         try:
             n_iter = int(iterations) if iterations is not None else 1000
-            n_iter = max(100, min(10000, n_iter))
+            n_iter = max(100, min(5000, n_iter))
             kwargs: Dict[str, Any] = {
                 "include_fema": include_fema,
                 "num_iterations": n_iter,
                 "run_simulation": True,
                 "one_storm": one_storm,
+                "live_event": live_event,
+                "reinsurance_layers": reinsurance_layers,
             }
             if file_store.get("kind") == "geojson":
                 kwargs["geojson"] = file_store.get("geojson")
@@ -1573,17 +1712,42 @@ def create_dash_app(
                 kwargs["csv_text"] = file_store.get("csv_text")
             result = analyze_portfolio(**kwargs)
         except ValueError as e:
-            return html.Div(
-                className="catia-flash catia-flash--warn",
-                children=[html.P(str(e), className="catia-flash__text")],
+            return (
+                html.Div(
+                    className="catia-flash catia-flash--warn",
+                    children=[html.P(str(e), className="catia-flash__text")],
+                ),
+                None,
             )
         except Exception as e:
             logger.exception("Portfolio accumulation failed")
-            return html.Div(
-                className="catia-flash catia-flash--warn",
-                children=[html.P(f"Accumulation failed: {e}", className="catia-flash__text")],
+            return (
+                html.Div(
+                    className="catia-flash catia-flash--warn",
+                    children=[html.P(f"Accumulation failed: {e}", className="catia-flash__text")],
+                ),
+                None,
             )
-        return build_portfolio_panel(result)
+        return build_portfolio_panel(result), result
+
+    @app.callback(
+        Output("portfolio-export-download", "data"),
+        Input("portfolio-export-btn", "n_clicks"),
+        State("portfolio-result-store", "data"),
+        prevent_initial_call=True,
+    )
+    def download_portfolio_pack(n_clicks: Optional[int], result: Optional[Dict[str, Any]]):
+        if not n_clicks or not result:
+            raise PreventUpdate
+        from catia.portfolio_export import build_portfolio_export_zip
+
+        data, filename = build_portfolio_export_zip(result)
+        return {
+            "content": base64.b64encode(data).decode("ascii"),
+            "filename": filename,
+            "base64": True,
+            "type": "application/zip",
+        }
 
     @app.callback(
         Output("live-feed-store", "data"),

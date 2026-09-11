@@ -156,17 +156,32 @@ def build_portfolio_panel(result: Optional[Dict[str, Any]]) -> html.Div:
 
     storm_block: Any = html.Div()
     if isinstance(storm, dict):
+        rein = storm.get("reinsurance") or {}
+        live_title = storm.get("live_event_title")
         storm_block = html.Div(
             className="catia-panel",
             children=[
-                html.H3("One storm hits the book", style={"marginTop": 0}),
+                html.H3(
+                    "Live event / one storm hits the book" if live_title else "One storm hits the book",
+                    style={"marginTop": 0},
+                ),
                 html.P(
-                    f"{storm.get('peril')} @ intensity {storm.get('intensity')} · "
+                    (
+                        f"{live_title} · "
+                        if live_title
+                        else ""
+                    )
+                    + f"{storm.get('peril')} @ intensity {storm.get('intensity')} · "
                     f"damage ratio {storm.get('damage_ratio')} · mode {storm.get('mode')}"
                     + (
                         f" · region {storm.get('region_id')}"
                         if storm.get("region_id")
                         else f" · radius {storm.get('radius_km')} km"
+                    )
+                    + (
+                        f" · intensity via {storm.get('intensity_source')}"
+                        if storm.get("intensity_source")
+                        else ""
                     )
                 ),
                 html.Div(
@@ -189,9 +204,29 @@ def build_portfolio_panel(result: Optional[Dict[str, Any]]) -> html.Div:
                         html.Div(
                             className="catia-kpi-card",
                             children=[
-                                html.Div("Total loss", className="catia-kpi-card__label"),
+                                html.Div("Gross loss", className="catia-kpi-card__label"),
                                 html.Div(
                                     _money(storm.get("total_loss")),
+                                    className="catia-kpi-card__value catia-kpi-card__value--sm",
+                                ),
+                            ],
+                        ),
+                        html.Div(
+                            className="catia-kpi-card",
+                            children=[
+                                html.Div("Net after XL", className="catia-kpi-card__label"),
+                                html.Div(
+                                    _money(rein.get("net_loss") if rein else storm.get("total_loss")),
+                                    className="catia-kpi-card__value catia-kpi-card__value--sm",
+                                ),
+                            ],
+                        ),
+                        html.Div(
+                            className="catia-kpi-card",
+                            children=[
+                                html.Div("Recovered", className="catia-kpi-card__label"),
+                                html.Div(
+                                    _money(rein.get("recovered") or 0),
                                     className="catia-kpi-card__value catia-kpi-card__value--sm",
                                 ),
                             ],
@@ -209,6 +244,36 @@ def build_portfolio_panel(result: Optional[Dict[str, Any]]) -> html.Div:
                     ],
                 ),
                 html.P(str(storm.get("note") or ""), className="catia-footnote"),
+            ],
+        )
+
+    rein_block: Any = html.Div()
+    layers = result.get("reinsurance_layers") or []
+    book_net = book.get("aggregate_net") or {}
+    book_rein = book.get("reinsurance") or {}
+    if layers or book_net:
+        rein_block = html.Div(
+            className="catia-panel",
+            children=[
+                html.H3("Reinsurance (XL)", style={"marginTop": 0}),
+                html.P(
+                    f"Mean recovered {_money(book_rein.get('mean_recovered'))} · "
+                    f"net AAL {_money(book_net.get('mean'))} · "
+                    f"net VaR95 {_money(book_net.get('var_95'))}"
+                    if book_net
+                    else "Layers applied to one-storm gross only (simulation off or empty book metrics).",
+                    className="catia-section-head__sub",
+                ),
+                html.Ul(
+                    [
+                        html.Li(
+                            f"{L.get('name') or 'XL'}: attach {_money(L.get('attachment'))} · "
+                            f"limit {_money(L.get('limit'))} · share {L.get('share')}"
+                        )
+                        for L in layers
+                    ]
+                    or [html.Li("No layers")]
+                ),
             ],
         )
 
@@ -253,9 +318,19 @@ def build_portfolio_panel(result: Optional[Dict[str, Any]]) -> html.Div:
                             html.Div(
                                 className="catia-kpi-card",
                                 children=[
-                                    html.Div("Book AAL", className="catia-kpi-card__label"),
+                                    html.Div("Book AAL (gross)", className="catia-kpi-card__label"),
                                     html.Div(
                                         _money((book.get("aggregate") or {}).get("mean")),
+                                        className="catia-kpi-card__value catia-kpi-card__value--sm",
+                                    ),
+                                ],
+                            ),
+                            html.Div(
+                                className="catia-kpi-card",
+                                children=[
+                                    html.Div("Book AAL (net)", className="catia-kpi-card__label"),
+                                    html.Div(
+                                        _money((book.get("aggregate_net") or book.get("aggregate") or {}).get("mean")),
                                         className="catia-kpi-card__value catia-kpi-card__value--sm",
                                     ),
                                 ],
@@ -269,6 +344,7 @@ def build_portfolio_panel(result: Optional[Dict[str, Any]]) -> html.Div:
                 ],
             ),
             map_block,
+            rein_block,
             storm_block,
             html.Div(
                 className="catia-panel",

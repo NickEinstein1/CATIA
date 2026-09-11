@@ -436,6 +436,14 @@ class PortfolioOneStormSpec(BaseModel):
     radius_km: float = Field(default=250.0, gt=0)
 
 
+class ReinsuranceLayerIn(BaseModel):
+    """Excess-of-loss layer: share × min(limit, max(0, gross − attachment))."""
+    attachment: float = Field(..., ge=0, description="Retention / attachment point (USD)")
+    limit: float = Field(..., gt=0, description="Layer limit (USD)")
+    share: float = Field(default=1.0, gt=0, le=1.0, description="Ceded share of the layer")
+    name: Optional[str] = None
+
+
 class PortfolioAccumulateRequest(BaseModel):
     """Accumulate AAL/VaR across many locations; optional one-storm shock."""
     locations: Optional[List[PortfolioLocationIn]] = Field(
@@ -461,6 +469,15 @@ class PortfolioAccumulateRequest(BaseModel):
     group_by: List[str] = Field(default=["region", "flood_zone"])
     run_simulation: bool = True
     one_storm: Optional[PortfolioOneStormSpec] = None
+    live_event: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Live feed event object; maps to a radius one-storm when set",
+    )
+    reinsurance_layers: Optional[List[ReinsuranceLayerIn]] = Field(
+        default=None,
+        max_length=10,
+        description="Optional XL layers applied to book aggregate and one-storm",
+    )
 
 
 class PortfolioAccumulateResponse(BaseModel):
@@ -473,6 +490,7 @@ class PortfolioAccumulateResponse(BaseModel):
     by_region: Optional[List[Dict[str, Any]]] = None
     by_flood_zone: Optional[List[Dict[str, Any]]] = None
     one_storm: Optional[Dict[str, Any]] = None
+    reinsurance_layers: Optional[List[Dict[str, Any]]] = None
     include_fema: bool = False
     disclaimer: str
     model_config = {"extra": "allow"}
@@ -491,4 +509,26 @@ class PortfolioOneStormRequest(BaseModel):
     center_lat: Optional[float] = None
     center_lon: Optional[float] = None
     radius_km: float = 250.0
+    live_event: Optional[Dict[str, Any]] = None
+    reinsurance_layers: Optional[List[ReinsuranceLayerIn]] = Field(default=None, max_length=10)
+
+
+class PortfolioLiveHitRequest(BaseModel):
+    """Apply a live feed event (by id or full object) as a radius shock on the book."""
+    locations: Optional[List[PortfolioLocationIn]] = Field(default=None, max_length=2000)
+    csv_text: Optional[str] = Field(default=None, max_length=2_000_000)
+    geojson: Optional[Dict[str, Any]] = None
+    include_fema: bool = False
+    event: Optional[Dict[str, Any]] = Field(default=None, description="Full live event object")
+    event_id: Optional[str] = Field(default=None, description="Look up in current live feed cache")
+    radius_km: Optional[float] = Field(default=None, gt=0)
+    intensity: Optional[float] = None
+    reinsurance_layers: Optional[List[ReinsuranceLayerIn]] = Field(default=None, max_length=10)
+    num_iterations: Optional[int] = Field(default=500, ge=100, le=5000)
+    run_simulation: bool = False
+
+
+class PortfolioExportRequest(PortfolioAccumulateRequest):
+    """Same as accumulate; returns a ZIP underwriting pack."""
+    pass
 

@@ -21,6 +21,8 @@ RATE_LIMIT_RULES = [
     ("/api/v1/portfolio/accumulate", "POST"),
     ("/api/v1/portfolio/resolve", "POST"),
     ("/api/v1/portfolio/one-storm", "POST"),
+    ("/api/v1/portfolio/live-hit", "POST"),
+    ("/api/v1/portfolio/export", "POST"),
 ]
 RATE_LIMIT_MAX_REQUESTS = 60
 RATE_LIMIT_WINDOW_SECONDS = 60
