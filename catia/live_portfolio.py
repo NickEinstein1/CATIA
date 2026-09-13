@@ -86,9 +86,13 @@ def live_event_to_one_storm(
     radius_km: Optional[float] = None,
     intensity: Optional[float] = None,
     peril: Optional[str] = None,
+    footprint: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Build a PortfolioOneStormSpec-compatible dict from a live feed event.
+
+    Includes event GeoJSON geometry when present (track / polygon) and an
+    auto footprint kind by peril (windfield, shake, …).
     """
     lat = _safe_float(event.get("lat"))
     lon = _safe_float(event.get("lon"))
@@ -117,6 +121,26 @@ def live_event_to_one_storm(
         DEFAULT_RADIUS_KM.get(peril_id, 150.0)
     )
 
+    geom = event.get("geometry")
+    if not isinstance(geom, dict):
+        geom = None
+    # Prefer primary polygon/line; ignore Point for footprint mask
+    if geom and str(geom.get("type") or "").lower() == "point":
+        # Try geometry_collection for a better footprint
+        for extra in event.get("geometry_collection") or []:
+            if isinstance(extra, dict) and str(extra.get("type") or "").lower() in (
+                "linestring",
+                "multilinestring",
+                "polygon",
+                "multipolygon",
+            ):
+                geom = extra
+                break
+        else:
+            geom = None
+
+    fp = footprint or "auto"
+
     return {
         "peril": peril_id,
         "intensity": inten,
@@ -124,13 +148,15 @@ def live_event_to_one_storm(
         "center_lat": lat,
         "center_lon": lon,
         "radius_km": r,
+        "footprint": fp,
+        "geometry": geom,
         "live_event_id": event.get("id"),
         "live_event_title": event.get("title"),
         "live_event_source": event.get("source"),
         "intensity_source": src,
         "note": (
-            "Mapped from live feed event — radius footprint + single intensity; "
-            "not a catalog windfield or shake map."
+            "Mapped from live feed event — intensity footprint with distance decay "
+            "(and track/polygon mask when geometry is available)."
         ),
     }
 

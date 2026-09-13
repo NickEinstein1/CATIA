@@ -101,7 +101,10 @@ async def portfolio_one_storm(body: PortfolioOneStormRequest) -> Dict[str, Any]:
         raw = parse_portfolio_payload(**_locations_payload(body))
         resolved = resolve_portfolio_locations(raw, include_fema=body.include_fema)
         if body.live_event:
-            spec = live_event_to_one_storm(body.live_event)
+            spec = live_event_to_one_storm(
+                body.live_event,
+                footprint=body.footprint,
+            )
             peril = spec["peril"]
             intensity = float(spec["intensity"])
             mode = "radius"
@@ -109,6 +112,8 @@ async def portfolio_one_storm(body: PortfolioOneStormRequest) -> Dict[str, Any]:
             center_lat = spec["center_lat"]
             center_lon = spec["center_lon"]
             radius_km = float(spec["radius_km"])
+            footprint = str(spec.get("footprint") or body.footprint or "auto")
+            geometry = spec.get("geometry")
             live_meta = {
                 k: spec.get(k)
                 for k in (
@@ -127,6 +132,8 @@ async def portfolio_one_storm(body: PortfolioOneStormRequest) -> Dict[str, Any]:
             center_lat = body.center_lat
             center_lon = body.center_lon
             radius_km = body.radius_km
+            footprint = body.footprint
+            geometry = body.geometry
             live_meta = {}
         storm = one_storm_scenario(
             resolved,
@@ -137,6 +144,8 @@ async def portfolio_one_storm(body: PortfolioOneStormRequest) -> Dict[str, Any]:
             center_lat=center_lat,
             center_lon=center_lon,
             radius_km=radius_km,
+            footprint=footprint,
+            geometry=geometry,
         )
         storm.update({k: v for k, v in live_meta.items() if v is not None})
         layers = _layers_payload(body)
@@ -169,6 +178,7 @@ async def portfolio_live_hit(body: PortfolioLiveHitRequest):
             event,
             radius_km=body.radius_km,
             intensity=body.intensity,
+            footprint=body.footprint,
         )
         result = analyze_portfolio(
             **_locations_payload(body),

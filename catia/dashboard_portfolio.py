@@ -171,8 +171,13 @@ def build_portfolio_panel(result: Optional[Dict[str, Any]]) -> html.Div:
                         if live_title
                         else ""
                     )
-                    + f"{storm.get('peril')} @ intensity {storm.get('intensity')} · "
-                    f"damage ratio {storm.get('damage_ratio')} · mode {storm.get('mode')}"
+                    + f"{storm.get('peril')} @ peak intensity {storm.get('intensity')} · "
+                    f"peak DR {storm.get('damage_ratio')} · mode {storm.get('mode')}"
+                    + (
+                        f" · footprint {(storm.get('footprint') or {}).get('kind')}"
+                        if storm.get("footprint")
+                        else ""
+                    )
                     + (
                         f" · region {storm.get('region_id')}"
                         if storm.get("region_id")

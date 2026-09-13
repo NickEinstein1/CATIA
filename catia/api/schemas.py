@@ -427,13 +427,21 @@ class PortfolioOneStormSpec(BaseModel):
     peril: PerilType = PerilType.HURRICANE
     intensity: float = Field(
         default=120.0,
-        description="Hazard intensity (e.g. wind mph, flood depth ft — peril-specific)",
+        description="Peak hazard intensity (e.g. wind mph, flood depth — peril-specific)",
     )
     mode: str = Field(default="region", description="region | radius")
     region_id: Optional[str] = None
     center_lat: Optional[float] = None
     center_lon: Optional[float] = None
     radius_km: float = Field(default=250.0, gt=0)
+    footprint: str = Field(
+        default="auto",
+        description="auto|uniform|windfield|shake|flood_bowl|wildfire",
+    )
+    geometry: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Optional GeoJSON LineString/Polygon from live feeds",
+    )
 
 
 class ReinsuranceLayerIn(BaseModel):
@@ -509,6 +517,8 @@ class PortfolioOneStormRequest(BaseModel):
     center_lat: Optional[float] = None
     center_lon: Optional[float] = None
     radius_km: float = 250.0
+    footprint: str = "auto"
+    geometry: Optional[Dict[str, Any]] = None
     live_event: Optional[Dict[str, Any]] = None
     reinsurance_layers: Optional[List[ReinsuranceLayerIn]] = Field(default=None, max_length=10)
 
@@ -523,6 +533,7 @@ class PortfolioLiveHitRequest(BaseModel):
     event_id: Optional[str] = Field(default=None, description="Look up in current live feed cache")
     radius_km: Optional[float] = Field(default=None, gt=0)
     intensity: Optional[float] = None
+    footprint: str = Field(default="auto", description="Intensity field shape")
     reinsurance_layers: Optional[List[ReinsuranceLayerIn]] = Field(default=None, max_length=10)
     num_iterations: Optional[int] = Field(default=500, ge=100, le=5000)
     run_simulation: bool = False

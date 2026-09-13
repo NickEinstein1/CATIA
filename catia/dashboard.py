@@ -764,6 +764,26 @@ def create_dash_app(
                             html.Div(
                                 className="catia-live-toolbar__field",
                                 children=[
+                                    html.Label("Hazard footprint", className="catia-live-toolbar__label"),
+                                    dcc.Dropdown(
+                                        id="portfolio-footprint",
+                                        options=[
+                                            {"label": "Auto (by peril)", "value": "auto"},
+                                            {"label": "Uniform", "value": "uniform"},
+                                            {"label": "Windfield (TC)", "value": "windfield"},
+                                            {"label": "Shake (EQ)", "value": "shake"},
+                                            {"label": "Flood bowl", "value": "flood_bowl"},
+                                            {"label": "Wildfire ring", "value": "wildfire"},
+                                        ],
+                                        value="auto",
+                                        clearable=False,
+                                        className="catia-dash-dropdown",
+                                    ),
+                                ],
+                            ),
+                            html.Div(
+                                className="catia-live-toolbar__field",
+                                children=[
                                     html.Label("Storm region id", className="catia-live-toolbar__label"),
                                     dcc.Input(
                                         id="portfolio-storm-region",
@@ -1596,6 +1616,7 @@ def create_dash_app(
         State("portfolio-storm-clat", "value"),
         State("portfolio-storm-clon", "value"),
         State("portfolio-storm-radius", "value"),
+        State("portfolio-footprint", "value"),
         State("portfolio-live-event", "value"),
         State("live-feed-store", "data"),
         State("portfolio-xl-attach", "value"),
@@ -1616,6 +1637,7 @@ def create_dash_app(
         storm_clat: Optional[Any],
         storm_clon: Optional[Any],
         storm_radius: Optional[Any],
+        footprint: Optional[str],
         live_event_id: Optional[str],
         live_store: Optional[Dict[str, Any]],
         xl_attach: Optional[Any],
@@ -1647,6 +1669,7 @@ def create_dash_app(
         include_fema = "fema" in opts
         one_storm = None
         live_event = None
+        fp = footprint or "auto"
         if "live" in opts and live_event_id:
             events = list((live_store or {}).get("events") or [])
             if not events:
@@ -1654,10 +1677,11 @@ def create_dash_app(
                     events = list((fetch_live_events_base(force=False) or {}).get("events") or [])
                 except Exception:
                     events = []
-            from catia.live_portfolio import find_live_event
+            from catia.live_portfolio import find_live_event, live_event_to_one_storm
 
             try:
-                live_event = find_live_event(events, str(live_event_id))
+                raw_ev = find_live_event(events, str(live_event_id))
+                one_storm = live_event_to_one_storm(raw_ev, footprint=fp)
             except ValueError as e:
                 return (
                     html.Div(
@@ -1675,6 +1699,7 @@ def create_dash_app(
                 "center_lat": float(storm_clat) if storm_clat is not None else None,
                 "center_lon": float(storm_clon) if storm_clon is not None else None,
                 "radius_km": float(storm_radius or 250),
+                "footprint": fp,
             }
         reinsurance_layers = None
         if "xl" in opts:

@@ -18,6 +18,13 @@ from catia.financial_impact import (
     MultiPerilSimulator,
     run_exposure_based_simulation,
 )
+from catia.hazard_footprints import (
+    extract_polygon,
+    extract_track_coords,
+    footprint_summary,
+    local_intensity_for_point,
+    resolve_footprint_kind,
+)
 from catia.live_portfolio import live_event_to_one_storm
 from catia.portfolio import (
     DISCLAIMER,
@@ -184,38 +191,140 @@ def one_storm_scenario(
     center_lat: Optional[float] = None,
     center_lon: Optional[float] = None,
     radius_km: float = 250.0,
+    footprint: str = "auto",
+    geometry: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
-    Deterministic shock: apply one peril intensity to all locations in a region
-    or within a radius — “what if this one storm hits the book.”
+    Deterministic shock with optional intensity footprint decay.
+
+    Modes:
+    - region: all locations in a CATIA region (uniform peak unless footprint decays
+      from region centroid — still requires center when footprint != uniform)
+    - radius: locations within radius_km of center / track / polygon
+
+    Footprints (``auto`` picks by peril): uniform, windfield, shake, flood_bowl, wildfire.
+    Optional GeoJSON ``geometry`` (LineString track or Polygon) from live feeds.
     """
     vuln = VulnerabilitySet()
-    damage_ratio = float(vuln.damage_ratio(peril, float(intensity)))
-    damage_ratio = max(0.0, min(1.0, damage_ratio))
+    peak = float(intensity)
+    kind = resolve_footprint_kind(peril, footprint)
+    track = extract_track_coords(geometry)
+    polygon = extract_polygon(geometry)
 
-    hit: List[PortfolioLocation] = []
+    # Region mode without coords: use uniform on whole region (legacy behavior)
     if mode == "region":
         if not region_id:
             raise ValueError("region_id is required when mode='region'")
-        hit = [loc for loc in locations if loc.region_id == region_id]
+        candidates = [loc for loc in locations if loc.region_id == region_id]
+        if kind == "uniform" or (center_lat is None or center_lon is None):
+            damage_ratio = max(0.0, min(1.0, float(vuln.damage_ratio(peril, peak))))
+            by_location: List[Dict[str, Any]] = []
+            by_region: Dict[str, Dict[str, float]] = {}
+            total_loss = 0.0
+            tiv_hit = 0.0
+            for loc in candidates:
+                loss = loc.tiv * damage_ratio
+                total_loss += loss
+                tiv_hit += loc.tiv
+                by_location.append(
+                    {
+                        "id": loc.id,
+                        "lat": loc.lat,
+                        "lon": loc.lon,
+                        "region_id": loc.region_id,
+                        "flood_zone": loc.flood_zone,
+                        "tiv": loc.tiv,
+                        "intensity": peak,
+                        "damage_ratio": round(damage_ratio, 4),
+                        "loss": round(loss, 2),
+                    }
+                )
+                bucket = by_region.setdefault(
+                    loc.region_id, {"tiv": 0.0, "loss": 0.0, "location_count": 0}
+                )
+                bucket["tiv"] += loc.tiv
+                bucket["loss"] += loss
+                bucket["location_count"] += 1
+            by_location.sort(key=lambda r: float(r["loss"]), reverse=True)
+            for b in by_region.values():
+                b["tiv"] = round(b["tiv"], 2)
+                b["loss"] = round(b["loss"], 2)
+            return {
+                "peril": peril,
+                "intensity": peak,
+                "damage_ratio": round(damage_ratio, 4),
+                "mode": mode,
+                "region_id": region_id,
+                "center_lat": center_lat,
+                "center_lon": center_lon,
+                "radius_km": None,
+                "footprint": footprint_summary(
+                    kind="uniform",
+                    peril=peril,
+                    peak_intensity=peak,
+                    radius_km=0.0,
+                    has_track=False,
+                    has_polygon=False,
+                ),
+                "hit_count": len(candidates),
+                "tiv_hit": round(tiv_hit, 2),
+                "total_loss": round(total_loss, 2),
+                "loss_ratio_of_book": round(
+                    total_loss / sum(l.tiv for l in locations) if locations else 0.0, 4
+                ),
+                "by_region": by_region,
+                "top_locations": by_location[:25],
+                "note": (
+                    "Region-wide uniform intensity — enable radius + footprint for "
+                    "distance decay."
+                ),
+            }
+        # Fall through: treat region candidates with radial footprint from center
+        hit_pool = candidates
+        use_radius_gate = False
+        if candidates and center_lat is not None and center_lon is not None:
+            max_d = max(
+                haversine_km(loc.lat, loc.lon, float(center_lat), float(center_lon))
+                for loc in candidates
+            )
+            r_eff = max(float(radius_km), max_d * 1.05, 1.0)
+        else:
+            r_eff = float(radius_km)
     else:
         if center_lat is None or center_lon is None:
             raise ValueError("center_lat and center_lon are required when mode='radius'")
-        r = float(radius_km)
-        hit = [
-            loc
-            for loc in locations
-            if haversine_km(float(center_lat), float(center_lon), loc.lat, loc.lon) <= r
-        ]
+        hit_pool = locations
+        use_radius_gate = True
+        r_eff = float(radius_km)
 
-    by_location: List[Dict[str, Any]] = []
-    by_region: Dict[str, Dict[str, float]] = {}
+    r = r_eff
+    by_location = []
+    by_region = {}
     total_loss = 0.0
     tiv_hit = 0.0
-    for loc in hit:
-        loss = loc.tiv * damage_ratio
+    hit_count = 0
+    for loc in hit_pool:
+        field = local_intensity_for_point(
+            loc.lat,
+            loc.lon,
+            center_lat=float(center_lat),
+            center_lon=float(center_lon),
+            peak_intensity=peak,
+            radius_km=r,
+            footprint=kind,
+            track_coords=track,
+            polygon=polygon,
+        )
+        if use_radius_gate and not field["inside"]:
+            continue
+        local_i = float(field["intensity"])
+        if local_i <= 0:
+            continue
+        dr = max(0.0, min(1.0, float(vuln.damage_ratio(peril, local_i))))
+        loss = loc.tiv * dr
         total_loss += loss
         tiv_hit += loc.tiv
+        hit_count += 1
         by_location.append(
             {
                 "id": loc.id,
@@ -224,6 +333,9 @@ def one_storm_scenario(
                 "region_id": loc.region_id,
                 "flood_zone": loc.flood_zone,
                 "tiv": loc.tiv,
+                "distance_km": field["distance_km"],
+                "intensity": local_i,
+                "damage_ratio": round(dr, 4),
                 "loss": round(loss, 2),
             }
         )
@@ -234,21 +346,30 @@ def one_storm_scenario(
         bucket["loss"] += loss
         bucket["location_count"] += 1
 
-    by_location.sort(key=lambda r: float(r["loss"]), reverse=True)
+    by_location.sort(key=lambda row: float(row["loss"]), reverse=True)
     for b in by_region.values():
         b["tiv"] = round(b["tiv"], 2)
         b["loss"] = round(b["loss"], 2)
 
+    peak_dr = max(0.0, min(1.0, float(vuln.damage_ratio(peril, peak))))
     return {
         "peril": peril,
-        "intensity": float(intensity),
-        "damage_ratio": round(damage_ratio, 4),
+        "intensity": peak,
+        "damage_ratio": round(peak_dr, 4),
         "mode": mode,
         "region_id": region_id,
         "center_lat": center_lat,
         "center_lon": center_lon,
-        "radius_km": float(radius_km) if mode == "radius" else None,
-        "hit_count": len(hit),
+        "radius_km": float(radius_km) if mode == "radius" else round(r, 2),
+        "footprint": footprint_summary(
+            kind=kind,
+            peril=peril,
+            peak_intensity=peak,
+            radius_km=r,
+            has_track=bool(track),
+            has_polygon=bool(polygon),
+        ),
+        "hit_count": hit_count,
         "tiv_hit": round(tiv_hit, 2),
         "total_loss": round(total_loss, 2),
         "loss_ratio_of_book": round(
@@ -257,8 +378,8 @@ def one_storm_scenario(
         "by_region": by_region,
         "top_locations": by_location[:25],
         "note": (
-            "Deterministic single-intensity shock on filtered locations — "
-            "not a probabilistic footprint or event catalog match."
+            f"Deterministic {kind} footprint on filtered locations — "
+            "not a probabilistic catalog match or official hazard product."
         ),
     }
 
@@ -350,6 +471,8 @@ def analyze_portfolio(
             center_lat=storm_spec.get("center_lat"),
             center_lon=storm_spec.get("center_lon"),
             radius_km=float(storm_spec.get("radius_km") or 250),
+            footprint=str(storm_spec.get("footprint") or "auto"),
+            geometry=storm_spec.get("geometry"),
         )
         for key in (
             "live_event_id",
