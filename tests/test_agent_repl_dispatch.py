@@ -86,6 +86,8 @@ def test_repl_run_default_artifacts(mock_pipe):
     ok, out, sess = _run("/run -p hurricane")
     assert ok is True
     mock_pipe.assert_called_once()
+    # positional: region, use_mock_data, perils — live by default
+    assert mock_pipe.call_args.args[1] is False
     call_kw = mock_pipe.call_args.kwargs
     assert call_kw.get("artifacts") is not None
     assert "dashboard" not in call_kw["artifacts"]

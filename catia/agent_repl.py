@@ -41,7 +41,7 @@ REPL_RUN_ARTIFACTS: Tuple[str, ...] = (
 
 # One-line hints (plain text); shown in /tips and rotated occasionally before the prompt.
 AGENT_TIPS: Tuple[str, ...] = (
-    "Default runs use mock/synthetic data — fine for demos; pair --real with NOAA_API_TOKEN for climate pulls.",
+    "Default runs pull live Open-Meteo / World Bank / USGS; use --mock only for offline demos.",
     "After /run or /risk, type /json to inspect results; catia_report.json includes metadata.transparency.",
     "Shell: catia-agent run --explain (or CATIA_EXPLAIN=1) prints what the pipeline will do before it runs.",
     "In the REPL, /run skips static Plotly HTML by default; use /run --full or /run --artifacts dashboard … to emit charts.",
@@ -350,10 +350,10 @@ async def dispatch_command(
         if verb == "/help":
             help_text = Text.from_markup(
                 "[bold cyan]Structured[/bold cyan] [dim](prefix [green]/[/green]):[/dim]\n"
-                "  [green]/run[/green]  [dim][-r|--region R] [-p|--perils P …] [--real] [--scenario S] "
+                "  [green]/run[/green]  [dim][-r|--region R] [-p|--perils P …] [--mock] [--scenario S] "
                 "[--iterations N] [-o|--output-dir D] [--full | --artifacts A …][/dim]\n"
                 "      [dim](REPL default skips static Plotly HTML under outputs/;[/dim] [green]--full[/green] "
-                "[dim]enables all artifacts.)[/dim]\n"
+                "[dim]enables all artifacts. Live APIs by default;[/dim] [green]--mock[/green] [dim]offline.)[/dim]\n"
                 "  [green]/risk[/green]   [dim][-r|--region R] [-p|--perils P …] [--real|--mock][/dim]\n"
                 "  [green]/simulate[/green]  [dim][-p|--perils P …] [--scenario S] [--iterations N] "
                 "[--no-uncertainty][/dim]\n"
@@ -499,7 +499,7 @@ async def dispatch_command(
         if verb == "/risk":
             region = "US_Gulf_Coast"
             perils: List[str] = list(DEFAULT_PERILS)
-            use_mock = True
+            use_mock = False
             i = 0
             while i < len(argv):
                 a = argv[i]
@@ -624,7 +624,7 @@ async def dispatch_command(
         if verb == "/run":
             region = "US_Gulf_Coast"
             perils: List[str] = list(DEFAULT_PERILS)
-            use_mock = True
+            use_mock = False
             scenario_id: Optional[str] = None
             iterations: Optional[int] = None
             output_dir: Optional[str] = None

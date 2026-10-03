@@ -31,7 +31,10 @@ class AnalysisRequest(BaseModel):
         default=[PerilType.HURRICANE, PerilType.FLOOD, PerilType.WILDFIRE, PerilType.EARTHQUAKE],
         description="List of perils to analyze"
     )
-    use_mock_data: bool = Field(default=True, description="Use mock data (True) or real APIs (False)")
+    use_mock_data: bool = Field(
+        default=False,
+        description="False = live APIs (default). True = synthetic mock for tests/demos only.",
+    )
 
 
 class ExposureRecord(BaseModel):

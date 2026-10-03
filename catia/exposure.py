@@ -9,6 +9,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
+import numpy as np
 import pandas as pd
 
 logger = logging.getLogger(__name__)
@@ -158,3 +159,96 @@ class ExposureStore:
     def records(self) -> List[Dict[str, Any]]:
         """Return a copy of all records."""
         return [dict(r) for r in self._records]
+
+
+# Coarse land-area proxies (km²) for indicative population from density when
+# total population is not present on the socioeconomic frame.
+_REGION_AREA_KM2: Dict[str, float] = {
+    "US_Gulf_Coast": 450_000,
+    "US_East_Coast": 380_000,
+    "US_West_Coast": 420_000,
+    "US_Midwest": 900_000,
+    "US_Southwest": 700_000,
+    "Caribbean": 80_000,
+    "Japan": 378_000,
+    "Europe": 500_000,
+    "Mediterranean": 400_000,
+    "Australia": 600_000,
+    "South_America": 800_000,
+    "Chile": 200_000,
+    "Africa": 500_000,
+    "Southeast_Asia": 450_000,
+    "South_Asia": 500_000,
+    "Turkey": 300_000,
+    "Indonesia": 400_000,
+}
+
+
+def indicative_tiv_from_socioeconomic(
+    region: str,
+    socioeconomic: Optional[pd.DataFrame],
+) -> float:
+    """
+    Estimate regional insured value (USD) from live World Bank / socioeconomic row.
+
+    Uses population × GDP/capita × insurance penetration, scaled by a regional
+    share so country-level indicators map to CATIA region labels.
+    """
+    gdp = 25_000.0
+    density = 50.0
+    infra = 0.6
+    population: Optional[float] = None
+    if socioeconomic is not None and not socioeconomic.empty:
+        row = socioeconomic.iloc[0]
+        try:
+            gdp = float(row.get("gdp_per_capita") or gdp)
+        except (TypeError, ValueError):
+            pass
+        try:
+            density = float(row.get("population_density") or density)
+        except (TypeError, ValueError):
+            pass
+        try:
+            infra = float(row.get("infrastructure_index") or infra)
+        except (TypeError, ValueError):
+            pass
+        raw_pop = row.get("population")
+        if raw_pop is not None:
+            try:
+                population = float(raw_pop)
+            except (TypeError, ValueError):
+                population = None
+    if population is None or population <= 0:
+        area = _REGION_AREA_KM2.get(region, 200_000.0)
+        population = max(50_000.0, density * area)
+    # Developed markets ~25% P&C penetration of GDP; scale with infrastructure.
+    penetration = float(np.clip(0.06 + 0.22 * infra, 0.05, 0.35))
+    # Region is a slice of national economy for multi-state / multi-province labels.
+    regional_share = 0.12 if str(region).startswith("US_") else 0.45
+    tiv = population * gdp * penetration * regional_share
+    return float(np.clip(tiv, 5.0e8, 2.0e12))
+
+
+def build_indicative_exposure(
+    region: str,
+    socioeconomic: Optional[pd.DataFrame] = None,
+    *,
+    tiv: Optional[float] = None,
+) -> ExposureStore:
+    """Build a single-region ExposureStore grounded in socioeconomic indicators."""
+    store = ExposureStore()
+    value = float(tiv) if tiv is not None and float(tiv) > 0 else indicative_tiv_from_socioeconomic(
+        region, socioeconomic
+    )
+    store.add_record(
+        region=region,
+        tiv=value,
+        line_of_business="property",
+        occupancy="mixed",
+    )
+    logger.info(
+        "Indicative exposure for %s: TIV=$%s (socioeconomic-grounded)",
+        region,
+        f"{value:,.0f}",
+    )
+    return store

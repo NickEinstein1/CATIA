@@ -20,7 +20,9 @@ import numpy as np
 from catia import __version__ as _CATIA_VERSION
 from catia.audit import create_audit_metadata, generate_run_id
 from catia.config import DEFAULT_PERILS, OUTPUT_CONFIG, SIMULATION_CONFIG
+from catia.hazard_calibration import calibrate_peril_params
 from catia.data_acquisition import fetch_all_data
+from catia.data_policy import use_mock_by_default
 from catia.export import ReportExporter
 from catia.financial_impact import (
     FinancialImpactSimulator,
@@ -53,7 +55,7 @@ def _artifact_wanted(artifacts: Optional[List[str]], name: str) -> bool:
 
 def run_catia_analysis(
     region: str = "US_Gulf_Coast",
-    use_mock_data: bool = True,
+    use_mock_data: Optional[bool] = None,
     perils: Optional[list] = None,
     *,
     scenario_id: Optional[str] = None,
@@ -68,7 +70,8 @@ def run_catia_analysis(
 
     Args:
         region: Geographic region for analysis
-        use_mock_data: Use mock data if True
+        use_mock_data: If None, use live-first process default (see data_policy).
+            True forces synthetic mock; False requires live connectors.
         perils: List of peril types (uses DEFAULT_PERILS if None)
         scenario_id: Optional climate scenario id (see ``CLIMATE_SCENARIOS`` in config)
         monte_carlo_iterations: Override global simulation iteration count for this run
@@ -94,9 +97,11 @@ def run_catia_analysis(
         SIMULATION_CONFIG["random_seed"] = int(random_seed)
 
     try:
+        if use_mock_data is None:
+            use_mock_data = use_mock_by_default()
         return _run_catia_analysis_body(
             region=region,
-            use_mock_data=use_mock_data,
+            use_mock_data=bool(use_mock_data),
             perils=perils,
             scenario_id=scenario_id,
             out_dir=out_dir,
@@ -160,9 +165,11 @@ def _run_catia_analysis_body(
     logger.info("-" * 80)
     try:
         data = fetch_all_data(region, use_mock=use_mock_data, perils=perils)
+        prov = data.get("provenance") or {}
         logger.info("✓ Climate data: %s records", len(data["climate"]))
         logger.info("✓ Socioeconomic data: %s records", len(data["socioeconomic"]))
         logger.info("✓ Historical events: %s records", len(data["historical_events"]))
+        logger.info("✓ Data mode: %s sources=%s", prov.get("data_mode"), prov.get("sources"))
         logger.info("✓ Perils analyzed: %s", ", ".join(data["perils_analyzed"]))
         for peril, events in data.get("events_by_peril", {}).items():
             logger.info("    - %s: %s events", peril, len(events))
@@ -252,18 +259,51 @@ def _run_catia_analysis_body(
     logger.info("\n[STEP 3] FINANCIAL IMPACT SIMULATION (Multi-Peril)")
     logger.info("-" * 80)
     try:
+        peril_calibration = calibrate_peril_params(
+            data.get("historical_events"),
+            perils,
+        )
+        exposure_store = None
+        vulnerability_set = None
+        loss_engine = "severity_frequency"
+        try:
+            from catia.exposure import build_indicative_exposure
+            from catia.vulnerability import VulnerabilitySet
+
+            exposure_store = build_indicative_exposure(
+                region, data.get("socioeconomic")
+            )
+            vulnerability_set = VulnerabilitySet()
+            loss_engine = "exposure_x_vulnerability"
+            logger.info(
+                "✓ Exposure grounding: TIV=$%s",
+                f"{exposure_store.get_total_tiv():,.0f}",
+            )
+        except Exception as e:
+            logger.warning("Exposure grounding unavailable, using severity MC: %s", e)
+
         multi_peril_results = run_multi_peril_analysis(
             perils,
             include_uncertainty=True,
             n_bootstrap=200,
             scenario_id=scenario_id,
             num_iterations=None,
+            peril_overrides=peril_calibration,
+            exposure_store=exposure_store,
+            vulnerability_set=vulnerability_set,
         )
+        multi_peril_results["loss_engine"] = loss_engine
 
         logger.info(
-            "✓ Monte Carlo simulations: %s iterations", mc_iter_applied
+            "✓ Monte Carlo simulations: %s iterations (%s)",
+            mc_iter_applied,
+            loss_engine,
         )
         logger.info("✓ Perils simulated: %s", ", ".join(perils))
+        logger.info(
+            "✓ Rates grounded in acquired events (%s)",
+            (data.get("provenance") or {}).get("data_mode", "unknown"),
+        )
 
         for contrib in multi_peril_results["contributions"]:
             logger.info(
@@ -362,7 +402,16 @@ def _run_catia_analysis_body(
             "run_id": run_id,
             "region": region,
             "timestamp": datetime.now().isoformat(),
-            "use_mock_data": use_mock_data,
+            "use_mock_data": bool(
+                use_mock_data
+                or (data.get("provenance") or {}).get("data_mode") in ("mock", "degraded_mock")
+            ),
+            "data_provenance": data.get("provenance"),
+            "peril_calibration": peril_calibration,
+            "loss_engine": multi_peril_results.get("loss_engine", "severity_frequency"),
+            "indicative_tiv": (
+                float(exposure_store.get_total_tiv()) if exposure_store is not None else None
+            ),
             "perils_analyzed": perils,
             "scenario_id": scenario_id,
             "monte_carlo_iterations": mc_iter_applied,

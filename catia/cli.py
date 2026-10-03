@@ -38,6 +38,7 @@ def _merge_run_spec(args: argparse.Namespace) -> RunSpec:
         region=args.region,
         perils=list(args.perils) if args.perils is not None else None,
         no_mock_data=args.no_mock_data,
+        mock_data=getattr(args, "mock_data", False),
         output_dir=args.output_dir,
         scenario_id=args.scenario,
         monte_carlo_iterations=args.iterations,
@@ -68,8 +69,7 @@ Examples:
 Artifact keys for --artifacts (default: all): {art_list}
 
 API bind defaults to loopback for safety; use --host 0.0.0.0 to listen on all interfaces.
---no-mock-data may perform outbound HTTP and requires API keys where connectors need them.
-
+--mock-data forces synthetic data for offline demos; live Open-Meteo/World Bank/USGS is the default.
 Large --iterations values can run for a long time; values above the threshold set by
 CATIA_MC_WARN (default 50000) log a warning before the run.
         """,
@@ -98,7 +98,12 @@ CATIA_MC_WARN (default 50000) log a warning before the run.
     parser.add_argument(
         "--no-mock-data",
         action="store_true",
-        help="Use real API data where implemented (requires keys); overrides config file",
+        help="Deprecated alias: live data is already the default",
+    )
+    parser.add_argument(
+        "--mock-data",
+        action="store_true",
+        help="Force synthetic mock data (tests/demos only; not for production metrics)",
     )
 
     parser.add_argument(

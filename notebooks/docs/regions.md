@@ -36,7 +36,7 @@ Which regions are associated with each modeled peril is defined per peril under 
 
 ## Mock data vs live connectors
 
-- **`use_mock=True` (default in many examples)** — Data acquisition can produce plausible synthetic series for **arbitrary** region strings. That does not imply full platform support (see below).
+- **`use_mock=True` (opt-in)** — Data acquisition can produce plausible synthetic series for **arbitrary** region strings. That does not imply full platform support (see below). Live APIs are the default.
 - **`REGION_CENTROIDS`** — Required for focal-region visualization and distance-based live scoring when those features need a known point.
 - **External APIs** — Connectors may map a subset of names (for example to ISO country codes). Unsupported names typically fall back to documented defaults in connector code.
 

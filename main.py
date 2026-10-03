@@ -40,7 +40,7 @@ if __name__ == "__main__":
     try:
         results = run_catia_analysis(
             region="US_Gulf_Coast",
-            use_mock_data=True,
+            use_mock_data=False,
             perils=["hurricane", "flood", "wildfire", "earthquake"],
         )
 

@@ -34,21 +34,25 @@ def build_pipeline_manifest(
     if use_mock_data:
         data_source = (
             "Mock / synthetic: ``DataAcquisition`` generates climate, socioeconomic, "
-            "and historical-event tables in-process (no live IBTrACS/HURDAT hook in "
-            "the default path). Suitable for demos and CI; not a vendor cat-model replacement."
+            "and historical-event tables in-process. Opt-in only "
+            "(``--mock-data`` / ``use_mock_data=true`` / ``CATIA_USE_MOCK_DATA=1``). "
+            "Not a vendor cat-model replacement."
         )
     else:
         data_source = (
-            "Live APIs attempted where implemented: NOAA climate (requires "
-            "``NOAA_API_TOKEN``), World Bank socioeconomic; failures fall back to mock. "
-            "Historical cat-event tables may still be synthetic — verify in "
-            "``catia.data_acquisition``."
+            "Live-first: Open-Meteo archive climate (NOAA CDO when ``NOAA_API_TOKEN`` "
+            "is set), World Bank socioeconomic, USGS FDSN for earthquakes; weather "
+            "peril history derived from climate extremes. Live failures raise "
+            "``DataUnavailableError`` unless ``CATIA_ALLOW_MOCK_FALLBACK=1``. "
+            "Monte Carlo rates calibrate from acquired events; losses use indicative "
+            "exposure × vulnerability when socioeconomic data is present."
         )
 
     steps: List[str] = [
         "Data: ``fetch_all_data`` → climate DataFrame, socioeconomic DataFrame, per-peril event history",
         "Risk (ML): ``train_risk_model`` → ``RiskPredictor`` (frequency/severity targets from features)",
-        "Actuarial: ``run_multi_peril_analysis`` → multi-peril Monte Carlo (config severity family, optional EVT & bootstrap uncertainty)",
+        "Actuarial: ``calibrate_peril_params`` + ``run_multi_peril_analysis`` "
+        "(exposure×vulnerability when available; EVT & bootstrap optional)",
         "Mitigation: ``generate_mitigation_recommendations`` from simulated baseline loss",
         "Visualization: ``create_dashboard`` static Plotly HTML bundle when ``dashboard`` artifact is enabled",
         "Reports: ``catia_report.json``, optional assumption register, compliance HTML, Phase-1 sensitivity exports per artifact filter",

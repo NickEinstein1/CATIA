@@ -42,7 +42,7 @@ def build_model_card(
         "intent": intent or "Catastrophe risk prediction: event probability and severity from climate and socioeconomic features.",
         "training_data_summary": training_data_summary or {
             "description": "Climate aggregates, socioeconomic features, historical event labels.",
-            "source": "Data acquisition module (NOAA/ECMWF/World Bank or mock).",
+            "source": "Live Open-Meteo / World Bank / USGS (or explicit mock).",
             "notes": "Customize per run if using real data.",
         },
         "metrics": metrics or {},

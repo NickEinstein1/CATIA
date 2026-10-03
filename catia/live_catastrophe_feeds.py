@@ -429,6 +429,13 @@ def fetch_all_live_events(
             errors.append(f"GDACS: {e}")
 
     fetched_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    all_failed = not any(sources_ok.values())
+    if all_failed:
+        errors.insert(
+            0,
+            "All live catastrophe feeds failed — refusing to invent events. "
+            "Check network / CATIA_LIVE_* proxy settings.",
+        )
     result = LiveFeedResult(
         events=events,
         errors=errors,
@@ -436,17 +443,22 @@ def fetch_all_live_events(
         sources_ok=sources_ok,
         latency_ms=latency_ms,
         http_status=http_status,
+        # Treat total feed failure as offline so UI cannot look "healthy empty"
+        offline_mode=all_failed,
     )
-    _CACHE["ts"] = now
-    _CACHE["payload"] = result
+    # Only persist successful (or partial) pulls — never cache a total blackout as fresh truth
+    if not all_failed:
+        _CACHE["ts"] = now
+        _CACHE["payload"] = result
+        if use_cache:
+            try:
+                from catia.live_cache import cache_set
 
-    if use_cache:
-        try:
-            from catia.live_cache import cache_set
-
-            cache_set(_CACHE_KEY_PERSIST, result.to_cache_blob())
-        except Exception as e:
-            logger.debug("Persistent cache write skipped: %s", e)
+                cache_set(_CACHE_KEY_PERSIST, result.to_cache_blob())
+            except Exception as e:
+                logger.debug("Persistent cache write skipped: %s", e)
+    else:
+        _CACHE["payload"] = None
 
     return result
 
@@ -501,24 +513,23 @@ def category_color(category: str) -> str:
     """Stable color for map markers by normalized category slug."""
     key = (category or "other").lower()
     palette = {
-        "earthquake": "#f97316",
-        "wildfires": "#ef4444",
-        "wildfire": "#ef4444",
-        "severe_storms": "#eab308",
-        "severe_storms_(meteorological)": "#eab308",
-        "volcanoes": "#a855f7",
-        "volcanic_activity": "#a855f7",
-        "floods": "#3b82f6",
-        "landslides": "#78716c",
-        "drought": "#ca8a04",
+        "earthquake": "#c2410c",
+        "wildfires": "#b91c1c",
+        "wildfire": "#b91c1c",
+        "severe_storms": "#a16207",
+        "severe_storms_(meteorological)": "#a16207",
+        "volcanoes": "#7c3aed",
+        "volcanic_activity": "#7c3aed",
+        "floods": "#1d4ed8",
+        "landslides": "#57534e",
+        "drought": "#a16207",
         "dust_and_haze": "#64748b",
         "dust_&_haze": "#64748b",
-        "sea_and_lake_ice": "#06b6d4",
-        "water_color": "#0ea5e9",
-        "manmade": "#f43f5e",
-        "snow": "#e2e8f0",
-        "hurricane": "#22d3ee",
-        "volcano": "#a855f7",
-        "volcanoes": "#a855f7",
+        "sea_and_lake_ice": "#0e7490",
+        "water_color": "#0369a1",
+        "manmade": "#be123c",
+        "snow": "#94a3b8",
+        "hurricane": "#0f766e",
+        "volcano": "#7c3aed",
     }
-    return palette.get(key, "#22d3ee")
+    return palette.get(key, "#334155")

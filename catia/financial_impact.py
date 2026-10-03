@@ -511,7 +511,8 @@ class MultiPerilSimulator:
     def __init__(self, perils: List[str] = None,
                  use_correlation: bool = True,
                  copula_type: str = "t",
-                 scenario_id: Optional[str] = None):
+                 scenario_id: Optional[str] = None,
+                 peril_overrides: Optional[Dict[str, Dict]] = None):
         """
         Initialize multi-peril simulator.
 
@@ -520,19 +521,23 @@ class MultiPerilSimulator:
             use_correlation: Whether to use copula-based correlation
             copula_type: Type of copula ('gaussian', 't', 'gumbel', 'clayton')
             scenario_id: Optional climate scenario (e.g. RCP4.5_mid, SSP2_2050, high_stress)
+            peril_overrides: Optional per-peril ``frequency_base`` / ``severity_params``
+                from live/catalog calibration (see ``hazard_calibration``).
         """
         self.perils = perils or list(PERIL_CONFIG.keys())
         self.use_correlation = use_correlation
         self.copula_type = copula_type
         self.scenario_id = scenario_id
+        self.peril_overrides = peril_overrides or {}
         self.simulators = {}
         self.correlation_simulator = None
 
         # Create simulators for each peril (apply scenario if set)
         for peril in self.perils:
             config = PERIL_CONFIG.get(peril, {})
-            freq = config.get('frequency_base', 0.5)
-            sev = dict(config.get('severity_params', {'mu': 15, 'sigma': 2}))
+            override = self.peril_overrides.get(peril) or {}
+            freq = float(override.get("frequency_base", config.get("frequency_base", 0.5)))
+            sev = dict(override.get("severity_params") or config.get("severity_params", {"mu": 15, "sigma": 2}))
             if _CLIMATE_SCENARIOS_AVAILABLE and scenario_id and apply_scenario_to_peril_config:
                 freq, sev = apply_scenario_to_peril_config(peril, freq, sev, scenario_id)
             self.simulators[peril] = FinancialImpactSimulator(
@@ -705,6 +710,7 @@ def _simulate_exposure_based_one_year(
     perils: List[str],
     rng: np.random.Generator,
     scenario_id: Optional[str] = None,
+    peril_overrides: Optional[Dict[str, Dict]] = None,
 ) -> Tuple[Dict[str, float], float]:
     """
     Simulate one year of losses using exposure × vulnerability.
@@ -722,11 +728,15 @@ def _simulate_exposure_based_one_year(
         except Exception:
             pass
 
+    overrides = peril_overrides or {}
     total_tiv = exposure_store.get_total_tiv()
     peril_losses = {p: 0.0 for p in perils}
 
     for peril in perils:
-        freq = PERIL_CONFIG.get(peril, {}).get("frequency_base", 0.5)
+        ov = overrides.get(peril) or {}
+        freq = float(
+            ov.get("frequency_base", PERIL_CONFIG.get(peril, {}).get("frequency_base", 0.5))
+        )
         freq_mult = scenario_adj.get(peril, {}).get("frequency_multiplier", 1.0)
         sev_mult = scenario_adj.get(peril, {}).get("severity_multiplier", 1.0)
         n_events = rng.poisson(freq * freq_mult)
@@ -750,6 +760,7 @@ def run_exposure_based_simulation(
     num_iterations: int = None,
     random_seed: int = None,
     scenario_id: Optional[str] = None,
+    peril_overrides: Optional[Dict[str, Dict]] = None,
 ) -> Dict:
     """
     Run Monte Carlo simulation using exposure × vulnerability.
@@ -766,7 +777,12 @@ def run_exposure_based_simulation(
 
     for i in range(num_iterations):
         peril_annual, agg = _simulate_exposure_based_one_year(
-            exposure_store, vulnerability_set, perils, rng, scenario_id=scenario_id
+            exposure_store,
+            vulnerability_set,
+            perils,
+            rng,
+            scenario_id=scenario_id,
+            peril_overrides=peril_overrides,
         )
         for p in perils:
             by_peril_losses[p][i] = peril_annual[p]
@@ -852,7 +868,8 @@ def run_multi_peril_analysis(perils: List[str] = None,
                              num_iterations: Optional[int] = None,
                              scenario_id: Optional[str] = None,
                              exposure_store: Optional["ExposureStore"] = None,
-                             vulnerability_set: Optional["VulnerabilitySet"] = None) -> Dict:
+                             vulnerability_set: Optional["VulnerabilitySet"] = None,
+                             peril_overrides: Optional[Dict[str, Dict]] = None) -> Dict:
     """
     Run financial impact analysis across multiple perils.
 
@@ -867,6 +884,7 @@ def run_multi_peril_analysis(perils: List[str] = None,
         scenario_id: Optional climate scenario (e.g. RCP4.5_mid, SSP2_2050, high_stress)
         exposure_store: If set with vulnerability_set, use exposure × vulnerability loss
         vulnerability_set: If set with exposure_store, use exposure-based simulation
+        peril_overrides: Live/catalog calibrated frequency and severity by peril
 
     Returns:
         Dictionary with multi-peril analysis results
@@ -878,9 +896,11 @@ def run_multi_peril_analysis(perils: List[str] = None,
             exposure_store, vulnerability_set, perils,
             num_iterations=num_iterations,
             scenario_id=scenario_id,
+            peril_overrides=peril_overrides,
         )
         contributions = MultiPerilSimulator(
-            perils, use_correlation=False, scenario_id=scenario_id
+            perils, use_correlation=False, scenario_id=scenario_id,
+            peril_overrides=peril_overrides,
         ).get_peril_contribution(results)
     else:
         simulator = MultiPerilSimulator(
@@ -888,6 +908,7 @@ def run_multi_peril_analysis(perils: List[str] = None,
             use_correlation=include_correlation,
             copula_type=copula_type,
             scenario_id=scenario_id,
+            peril_overrides=peril_overrides,
         )
         results = simulator.simulate_all_perils(num_iterations)
         contributions = simulator.get_peril_contribution(results)
@@ -898,6 +919,7 @@ def run_multi_peril_analysis(perils: List[str] = None,
         'contributions': contributions.to_dict('records'),
         'aggregate_metrics': results['aggregate']['metrics'],
         'correlation_used': results.get('correlation_used', False),
+        'peril_calibration': peril_overrides,
     }
     if scenario_id and scenario_id != "baseline":
         output['scenario_id'] = scenario_id

@@ -69,10 +69,15 @@ class RiskPredictor:
         # Create features
         features = climate_agg.copy()
         
-        # Add socioeconomic features (repeat for each month)
+        # Add socioeconomic features (repeat for each month) — numeric only
         for col in socioeconomic_data.columns:
-            if col != 'region':
-                features[col] = socioeconomic_data[col].values[0]
+            if col in ("region", "source"):
+                continue
+            val = socioeconomic_data[col].values[0]
+            try:
+                features[col] = float(val)
+            except (TypeError, ValueError):
+                continue
         
         # Create target variables
         # Event probability: 1 if event occurred that month, 0 otherwise
@@ -88,7 +93,7 @@ class RiskPredictor:
         
         # Prepare X and y
         feature_cols = [col for col in features.columns if col not in ['date', 'event_occurred', 'event_severity']]
-        X = features[feature_cols].copy()
+        X = features[feature_cols].select_dtypes(include=["number"]).copy()
         y_prob = features['event_occurred']
         y_sev = features['event_severity']
         

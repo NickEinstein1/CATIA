@@ -1,9 +1,11 @@
 # Example run: defaults aligned with package DEFAULT_PERILS; explicit fields for clarity.
+# use_mock_data: false is the production default (live Open-Meteo / World Bank / USGS).
+# Set true only for offline demos or CI without network.
 region: US_Gulf_Coast
 perils:
   - hurricane
   - flood
-use_mock_data: true
+use_mock_data: false
 scenario_id: baseline
 # Skip static Plotly HTML in outputs/ unless you add ``dashboard`` (matches REPL ``/run`` default).
 artifacts:

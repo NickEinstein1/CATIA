@@ -53,7 +53,7 @@ from catia.pipeline import run_catia_analysis
 
 results = run_catia_analysis(
     region="US_Gulf_Coast",
-    use_mock_data=True,
+    use_mock_data=False,  # live Open-Meteo / World Bank / USGS (default)
     perils=["hurricane", "flood"]
 )
 # Outputs: report JSON, dashboards, compliance report, optional feature importance
@@ -68,7 +68,7 @@ uvicorn catia.api.app:app --reload --port 8000
 
 **CLI:** `catia --api --port 8000`
 
-**System dashboard (Dash):** futuristic command-center UI with an **orthographic globe**, an **OpenStreetMap** 2D map (`dash-leaflet`) with the same markers, charts, and assumptions:
+**System dashboard (Dash):** institutional operations desk with an **orthographic globe**, an **OpenStreetMap** 2D map (`dash-leaflet`) with the same markers, charts, and assumptions:
 
 ```bash
 catia --dashboard
@@ -96,7 +96,7 @@ Try `/help`, `/run --perils hurricane flood`, or short plain phrases like *tips*
 
 | Area | Features |
 | ---- | -------- |
-| **Data** | NOAA/ECMWF/World Bank connectors; cache; mock data for development |
+| **Data** | Open-Meteo + NOAA CDO + World Bank + USGS; live-first; mock opt-in for CI/demos |
 | **Risk model** | Probability & severity models (RF, GB, optional MLP); ensemble (`CATIA_USE_ENSEMBLE=1`); model registry |
 | **Simulation** | Multi-peril Monte Carlo; Lognormal, Pareto, Weibull, Gamma, spliced severity; parallel runs; VaR/TVaR, return periods |
 | **Tail & uncertainty** | EVT/GPD; bootstrap confidence intervals; correlation (Gaussian/t/Clayton/Gumbel copulas) |
@@ -131,6 +131,22 @@ Try `/help`, `/run --perils hurricane flood`, or short plain phrases like *tips*
   ```
 
 - **[Tutorial](notebooks/tutorial.ipynb)** — Step-by-step notebook
+
+---
+
+## Data mode (production)
+
+CATIA is **live-first**. Analysis and the dashboard pull real sources by default:
+
+| Layer | Source |
+| ----- | ------ |
+| Climate covariates | Open-Meteo archive (NOAA CDO when `NOAA_API_TOKEN` is set) |
+| Socioeconomic | World Bank indicators |
+| Earthquake history | USGS FDSN catalog |
+| Weather peril history | Extreme days derived from live climate (documented model, not RNG catalogs) |
+| Live Earth desk | USGS / NASA EONET / GDACS event feeds |
+
+Synthetic mock data is **opt-in** only: `catia --mock-data`, `use_mock_data: true` in a run spec, or `CATIA_USE_MOCK_DATA=1`. Live failures do **not** silently invent data unless `CATIA_ALLOW_MOCK_FALLBACK=1` (degraded demos). Reports include `metadata.data_provenance`.
 
 ---
 

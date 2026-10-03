@@ -45,7 +45,7 @@ class RiskAnalysis:
         self,
         region: str,
         *,
-        use_mock_data: bool = True,
+        use_mock_data: Optional[bool] = None,
         perils: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         perils = perils or list(DEFAULT_PERILS)
@@ -72,17 +72,20 @@ class RiskAnalysis:
         self,
         region: str,
         *,
-        use_mock_data: bool = True,
+        use_mock_data: Optional[bool] = None,
         perils: Optional[List[str]] = None,
     ) -> RiskAnalysisResult:
         """Fetch data and train; return structured result for the agent UI."""
+        from catia.data_policy import use_mock_by_default
+
         perils = perils or list(DEFAULT_PERILS)
-        data = self.acquire(region, use_mock_data=use_mock_data, perils=perils)
+        mock = use_mock_by_default() if use_mock_data is None else bool(use_mock_data)
+        data = self.acquire(region, use_mock_data=mock, perils=perils)
         summary = self.train(data)
         return RiskAnalysisResult(
             region=region,
             perils=perils,
-            use_mock_data=use_mock_data,
+            use_mock_data=mock,
             data=data,
             model_summary=summary,
         )

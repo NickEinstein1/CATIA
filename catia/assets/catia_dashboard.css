@@ -1,57 +1,59 @@
-/* CATIA futuristic dashboard — dark command-center aesthetic */
+/* CATIA operations desk — institutional risk UI (not neon “AI dashboard”) */
+
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap");
 
 :root {
-  --catia-bg-deep: #070b14;
-  --catia-bg-panel: rgba(15, 23, 42, 0.72);
-  --catia-border: rgba(56, 189, 248, 0.25);
-  --catia-glow: rgba(34, 211, 238, 0.45);
-  --catia-text: #e2e8f0;
-  --catia-muted: #94a3b8;
-  --catia-accent: #22d3ee;
-  --catia-accent-2: #a855f7;
+  --catia-bg-deep: #e8ecf1;
+  --catia-bg-panel: #f7f8fa;
+  --catia-border: #c5ced9;
+  --catia-glow: transparent;
+  --catia-text: #1a2332;
+  --catia-muted: #5a6575;
+  --catia-accent: #0f5c5c;
+  --catia-accent-2: #8a5a2b;
+  --catia-ink: #121820;
+  --catia-rule: #9aa8b8;
 }
 
 body {
   background: var(--catia-bg-deep) !important;
   background-image:
-    radial-gradient(ellipse 120% 80% at 50% -20%, rgba(34, 211, 238, 0.12), transparent 50%),
-    radial-gradient(ellipse 80% 50% at 100% 50%, rgba(168, 85, 247, 0.08), transparent 45%),
-    linear-gradient(180deg, #070b14 0%, #0a0f1a 40%, #070b14 100%) !important;
+    linear-gradient(180deg, #dfe5ec 0%, #e8ecf1 28%, #eef1f5 100%) !important;
   color: var(--catia-text) !important;
   min-height: 100vh;
 }
 
 .catia-future-root {
-  max-width: 1400px;
+  max-width: 1280px;
   margin: 0 auto;
-  padding: 28px 24px 48px;
-  font-family: "Segoe UI", system-ui, "IBM Plex Sans", sans-serif;
+  padding: 28px 24px 56px;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
   text-rendering: optimizeLegibility;
 }
 
 .catia-hero {
-  text-align: center;
-  margin-bottom: 8px;
-  padding: 28px 20px 20px;
-  border-radius: 16px;
-  border: 1px solid var(--catia-border);
-  background: var(--catia-bg-panel);
-  box-shadow:
-    0 0 40px rgba(34, 211, 238, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(12px);
+  text-align: left;
+  margin-bottom: 16px;
+  padding: 22px 0 18px;
+  border-radius: 0;
+  border: none;
+  border-bottom: 2px solid var(--catia-ink);
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .catia-hero h1 {
-  margin: 0 0 8px;
-  font-size: 1.75rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  background: linear-gradient(90deg, var(--catia-accent), #fff 40%, var(--catia-accent-2));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  margin: 0 0 6px;
+  font-family: "Source Serif 4", "Times New Roman", serif;
+  font-size: 2.1rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-transform: none;
+  background: none;
+  -webkit-background-clip: unset;
+  background-clip: unset;
+  color: var(--catia-ink);
 }
 
 .catia-hero .sub {
@@ -64,12 +66,12 @@ body {
   display: inline-block;
   margin-top: 12px;
   padding: 4px 12px;
-  border-radius: 999px;
+  border-radius: 2px;
   font-size: 0.75rem;
   letter-spacing: 0.12em;
   color: var(--catia-accent);
   border: 1px solid var(--catia-border);
-  background: rgba(34, 211, 238, 0.08);
+  background: rgba(15, 92, 92, 0.06);
 }
 
 /* Dash tabs override */
@@ -91,7 +93,7 @@ body {
   background: rgba(15, 23, 42, 0.95) !important;
   color: var(--catia-accent) !important;
   border-color: var(--catia-border) !important;
-  box-shadow: 0 -2px 16px rgba(34, 211, 238, 0.12);
+  box-shadow: 0 -2px 16px rgba(15, 92, 92, 0.08);
 }
 
 .catia-panel {
@@ -121,7 +123,7 @@ body {
 }
 
 .catia-panel code {
-  background: rgba(34, 211, 238, 0.12);
+  background: rgba(15, 92, 92, 0.08);
   color: var(--catia-accent);
   padding: 2px 8px;
   border-radius: 4px;
@@ -287,7 +289,7 @@ body {
   padding: 4px 10px;
   border-radius: 999px;
   border: 1px solid rgba(56, 189, 248, 0.22);
-  background: rgba(34, 211, 238, 0.06);
+  background: rgba(15, 92, 92, 0.04);
   color: var(--catia-muted);
 }
 
@@ -304,7 +306,7 @@ body {
 a.catia-link {
   color: var(--catia-accent) !important;
   text-decoration: none;
-  border-bottom: 1px solid rgba(34, 211, 238, 0.22);
+  border-bottom: 1px solid rgba(15, 92, 92, 0.18);
 }
 
 a.catia-link:hover {
@@ -330,8 +332,8 @@ a.catia-link:hover {
 }
 
 .catia-flash--info {
-  border: 1px solid rgba(34, 211, 238, 0.4);
-  background: rgba(34, 211, 238, 0.08);
+  border: 1px solid rgba(15, 92, 92, 0.28);
+  background: rgba(15, 92, 92, 0.06);
 }
 
 .catia-flash__title {
@@ -400,9 +402,9 @@ a.catia-link:hover {
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   font-size: 0.82rem;
-  background: rgba(34, 211, 238, 0.12);
+  background: rgba(15, 92, 92, 0.08);
   color: var(--catia-accent);
-  border: 1px solid rgba(34, 211, 238, 0.35);
+  border: 1px solid rgba(15, 92, 92, 0.22);
 }
 
 .catia-score-pill--high {
@@ -550,7 +552,7 @@ a.catia-link:hover {
   z-index: 1200 !important;
   border-color: var(--wx-line-hot) !important;
   background: rgba(4, 12, 20, 0.98) !important;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(34, 211, 238, 0.12);
+  box-shadow: 0 1px 0 rgba(18, 24, 32, 0.08);
 }
 
 .catia-dash-dropdown .dash-dropdown-option,
@@ -563,7 +565,7 @@ a.catia-link:hover {
 .catia-live-toolbar .dash-dropdown-option:hover,
 .catia-dash-dropdown .dash-dropdown-option[data-highlighted],
 .catia-live-toolbar .dash-dropdown-option[data-highlighted] {
-  background: rgba(34, 211, 238, 0.12) !important;
+  background: rgba(15, 92, 92, 0.08) !important;
   color: #a7f3ff !important;
 }
 
@@ -666,7 +668,7 @@ a.catia-link:hover {
 }
 
 .catia-dash-dropdown .Select-option.is-focused {
-  background: rgba(34, 211, 238, 0.12) !important;
+  background: rgba(15, 92, 92, 0.08) !important;
 }
 
 .catia-dash-dropdown .Select-value-label,
@@ -679,7 +681,7 @@ a.catia-link:hover {
 }
 
 .catia-dash-slider .rc-slider-track {
-  background: rgba(34, 211, 238, 0.45) !important;
+  background: rgba(15, 92, 92, 0.35) !important;
 }
 
 .catia-dash-slider .rc-slider-handle {
@@ -743,7 +745,7 @@ a.catia-link:hover {
 }
 
 .catia-upload-zone:hover {
-  border-color: rgba(34, 211, 238, 0.45);
+  border-color: rgba(15, 92, 92, 0.35);
   color: var(--catia-accent);
 }
 
@@ -882,31 +884,31 @@ textarea:focus-visible,
    ========================================================================== */
 
 :root {
-  --wx-void: #02060b;
-  --wx-night: #07111c;
-  --wx-surface: rgba(8, 23, 36, 0.78);
-  --wx-surface-raised: rgba(10, 29, 45, 0.9);
-  --wx-line: rgba(118, 193, 224, 0.16);
-  --wx-line-hot: rgba(84, 217, 255, 0.42);
-  --wx-cyan: #60ddff;
-  --wx-cyan-soft: #a7efff;
-  --wx-mint: #54f2c2;
-  --wx-amber: #ffc857;
-  --wx-red: #ff6b72;
-  --wx-violet: #ad8cff;
-  --wx-text: #edfaff;
-  --wx-muted: #87a9b8;
-  --wx-dim: #4f7180;
-  --wx-radius: 18px;
-  --wx-shadow: 0 26px 80px rgba(0, 0, 0, 0.32);
+  --wx-void: #e8ecf1;
+  --wx-night: #dfe5ec;
+  --wx-surface: #f7f8fa;
+  --wx-surface-raised: #ffffff;
+  --wx-line: #c5ced9;
+  --wx-line-hot: #0f5c5c;
+  --wx-cyan: #0f5c5c;
+  --wx-cyan-soft: #1a7a7a;
+  --wx-mint: #1f6f5b;
+  --wx-amber: #8a5a2b;
+  --wx-red: #9b2c2c;
+  --wx-violet: #3d4f66;
+  --wx-text: #1a2332;
+  --wx-muted: #5a6575;
+  --wx-dim: #7a8696;
+  --wx-radius: 4px;
+  --wx-shadow: 0 1px 0 rgba(18, 24, 32, 0.06);
   --catia-bg-deep: var(--wx-void);
   --catia-bg-panel: var(--wx-surface);
   --catia-border: var(--wx-line);
-  --catia-glow: rgba(96, 221, 255, 0.42);
+  --catia-glow: transparent;
   --catia-text: var(--wx-text);
   --catia-muted: var(--wx-muted);
   --catia-accent: var(--wx-cyan);
-  --catia-accent-2: var(--wx-violet);
+  --catia-accent-2: var(--wx-amber);
 }
 
 html {
@@ -917,11 +919,9 @@ body {
   margin: 0;
   background-color: var(--wx-void) !important;
   background-image:
-    radial-gradient(circle at 12% -10%, rgba(49, 143, 176, 0.18), transparent 34%),
-    radial-gradient(circle at 96% 5%, rgba(41, 89, 139, 0.14), transparent 31%),
-    linear-gradient(160deg, #02060b 0%, #06101a 48%, #02070d 100%) !important;
+    linear-gradient(180deg, #dfe5ec 0%, #e8ecf1 40%, #eef1f5 100%) !important;
   color: var(--wx-text) !important;
-  font-family: Inter, "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
 }
 
 body::before {
@@ -946,12 +946,12 @@ body::before {
   box-sizing: border-box;
   margin: 0 auto;
   padding: 20px 0 64px;
-  font-family: Inter, "SF Pro Display", "Segoe UI", system-ui, sans-serif;
-  /* Dash 4 dropdown design tokens (dark command theme) */
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  /* Dash 4 dropdown design tokens */
   --Dash-Spacing: 4px;
-  --Dash-Fill-Inverse-Strong: rgba(4, 12, 20, 0.96);
-  --Dash-Fill-Interactive-Strong: #22d3ee;
-  --Dash-Fill-Interactive-Weak: rgba(34, 211, 238, 0.14);
+  --Dash-Fill-Inverse-Strong: rgba(255, 255, 255, 0.96);
+  --Dash-Fill-Interactive-Strong: #0f5c5c;
+  --Dash-Fill-Interactive-Weak: rgba(15, 92, 92, 0.10);
   --Dash-Fill-Disabled: rgba(51, 65, 85, 0.55);
   --Dash-Stroke-Strong: rgba(56, 189, 248, 0.38);
   --Dash-Text-Strong: #e2e8f0;
@@ -1089,7 +1089,7 @@ body::before {
   height: 9px;
   border-radius: 50%;
   background: var(--wx-cyan);
-  box-shadow: 0 0 18px var(--wx-cyan);
+  box-shadow: none;
   transform: translate(-50%, -50%);
 }
 
@@ -1105,10 +1105,10 @@ body::before {
 .wx-command-header h1 {
   margin: 0;
   color: var(--wx-text);
-  font-size: clamp(2.45rem, 5vw, 5.35rem);
+  font-size: clamp(1.85rem, 3.2vw, 2.75rem);
   font-weight: 420;
-  letter-spacing: -0.055em;
-  line-height: 0.94;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
 }
 
 .wx-command-header h1 span {
@@ -1368,7 +1368,7 @@ body::before {
   height: 1px;
   content: "";
   background: var(--wx-cyan);
-  box-shadow: 0 0 12px var(--wx-cyan);
+  box-shadow: none;
 }
 
 .catia-panel h3,

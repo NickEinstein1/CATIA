@@ -506,33 +506,19 @@ def _weather_command_header(output_dir: Path) -> html.Header:
                         className="wx-brand-row",
                         children=[
                             html.Div(
-                                className="wx-brand-mark",
-                                **{"aria-hidden": "true"},
-                                children=[
-                                    html.Span(className="wx-brand-mark__orbit"),
-                                    html.Span(className="wx-brand-mark__core"),
-                                ],
-                            ),
-                            html.Div(
                                 children=[
                                     html.P(
-                                        "CATIA / ATMOSPHERIC INTELLIGENCE",
+                                        "CATIA catastrophe operations",
                                         className="wx-eyebrow",
                                     ),
-                                    html.H1(
-                                        [
-                                            "Global Hazard",
-                                            html.Br(),
-                                            html.Span("Command System"),
-                                        ]
-                                    ),
+                                    html.H1("Risk desk"),
                                 ]
                             ),
                         ],
                     ),
                     html.P(
-                        "A live decision surface for catastrophe signals, modeled risk, "
-                        "and regional exposure—ranked by the CATIA intelligence layer.",
+                        "Live hazard feeds, portfolio accumulation, and actuarial "
+                        "metrics from observed climate and event sources—not synthetic placeholders.",
                         className="wx-command-header__lede",
                     ),
                     html.Div(
@@ -541,14 +527,14 @@ def _weather_command_header(output_dir: Path) -> html.Header:
                             html.Span(
                                 [
                                     html.I(className="wx-status-dot wx-status-dot--live"),
-                                    "LIVE OBSERVATION NETWORK",
+                                    "Observation network",
                                 ],
                                 className="wx-network-strip__live",
                             ),
                             html.Span("USGS", className="wx-source-token"),
                             html.Span("NASA EONET", className="wx-source-token"),
                             html.Span("GDACS", className="wx-source-token"),
-                            html.Span("BUILD 2.5.0", className="wx-source-token"),
+                            html.Span("Open-Meteo", className="wx-source-token"),
                         ],
                     ),
                 ],
@@ -557,20 +543,6 @@ def _weather_command_header(output_dir: Path) -> html.Header:
                 className="wx-radar-console",
                 **{"aria-label": "CATIA system status"},
                 children=[
-                    html.Div(
-                        className="wx-radar",
-                        **{"aria-hidden": "true"},
-                        children=[
-                            html.Span(className="wx-radar__ring wx-radar__ring--one"),
-                            html.Span(className="wx-radar__ring wx-radar__ring--two"),
-                            html.Span(className="wx-radar__ring wx-radar__ring--three"),
-                            html.Span(className="wx-radar__crosshair"),
-                            html.Span(className="wx-radar__sweep"),
-                            html.Span(className="wx-radar__ping wx-radar__ping--one"),
-                            html.Span(className="wx-radar__ping wx-radar__ping--two"),
-                            html.Span(className="wx-radar__ping wx-radar__ping--three"),
-                        ],
-                    ),
                     html.Div(
                         className="wx-console-meta",
                         children=[
@@ -1339,7 +1311,7 @@ def create_dash_app(
                         html.Ul([
                             html.Li([html.Code("catia"), " — full analysis"]),
                             html.Li([html.Code("catia --api --port 8000"), " — REST API"]),
-                            html.Li([html.Code("catia --dashboard"), " — this command center"]),
+                            html.Li([html.Code("catia --dashboard"), " — this operations desk"]),
                             html.Li(
                                 "Open Global view for modeled exposure, or Live Earth for filtered "
                                 "real-time feeds."
@@ -1374,7 +1346,13 @@ def create_dash_app(
                             html.Tr([html.Td("Region"), html.Td(meta.get("region", "—"))]),
                             html.Tr([html.Td("Timestamp"), html.Td(meta.get("timestamp", "—"))]),
                             html.Tr([html.Td("Perils"), html.Td(", ".join(meta.get("perils_analyzed", [])))]),
-                            html.Tr([html.Td("Mock data"), html.Td(str(meta.get("use_mock_data", "—")))]),
+                            html.Tr([html.Td("Data mode"), html.Td(
+                                str((meta.get("data_provenance") or {}).get("data_mode")
+                                    or ("mock" if meta.get("use_mock_data") else "live"))
+                            )]),
+                            html.Tr([html.Td("Data sources"), html.Td(
+                                str((meta.get("data_provenance") or {}).get("sources") or "—")
+                            )]),
                         ]),
                     ]),
                     html.Div(className="catia-panel", children=[

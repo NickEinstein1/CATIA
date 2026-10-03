@@ -98,6 +98,76 @@ async def readiness_check():
         checks.append(ReadinessCheck(name="config", status="error", message=str(e)))
         all_ok = False
 
+    # Data policy: live-first (informational unless mock forced for entire process)
+    try:
+        from catia.data_policy import allow_mock_fallback, use_mock_by_default
+
+        mock_default = use_mock_by_default()
+        checks.append(
+            ReadinessCheck(
+                name="data_policy",
+                status="ok" if not mock_default else "degraded",
+                message=(
+                    "live-first"
+                    if not mock_default
+                    else "CATIA_USE_MOCK_DATA forces mock default"
+                ),
+            )
+        )
+        if allow_mock_fallback():
+            checks.append(
+                ReadinessCheck(
+                    name="mock_fallback",
+                    status="degraded",
+                    message="CATIA_ALLOW_MOCK_FALLBACK=1 (live failures may synthesize)",
+                )
+            )
+    except Exception as e:
+        checks.append(ReadinessCheck(name="data_policy", status="error", message=str(e)))
+        all_ok = False
+
+    # Live climate endpoint reachability (degraded if unreachable — do not crash probes)
+    try:
+        import requests
+        from catia.data.connectors import OPEN_METEO_ARCHIVE
+
+        probe = requests.get(
+            OPEN_METEO_ARCHIVE,
+            params={
+                "latitude": 28.5,
+                "longitude": -90.0,
+                "start_date": "2024-01-01",
+                "end_date": "2024-01-03",
+                "daily": "temperature_2m_mean",
+                "timezone": "UTC",
+            },
+            timeout=8,
+        )
+        if probe.status_code == 200:
+            checks.append(
+                ReadinessCheck(
+                    name="live_climate",
+                    status="ok",
+                    message="Open-Meteo archive reachable",
+                )
+            )
+        else:
+            checks.append(
+                ReadinessCheck(
+                    name="live_climate",
+                    status="degraded",
+                    message=f"Open-Meteo HTTP {probe.status_code}",
+                )
+            )
+    except Exception as e:
+        checks.append(
+            ReadinessCheck(
+                name="live_climate",
+                status="degraded",
+                message=f"unreachable: {e}",
+            )
+        )
+
     return ReadinessResponse(
         ready=all_ok,
         version=__version__,

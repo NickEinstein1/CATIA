@@ -31,13 +31,24 @@ API_CONFIG = {
         "retry_attempts": 3
     },
     "ECMWF": {
+        # Reserved / not wired. Production climate path uses Open-Meteo (+ optional NOAA CDO).
         "base_url": "https://api.ecmwf.int/v1",
         "endpoints": {
             "forecast": "/forecasts",
             "reanalysis": "/reanalysis"
         },
         "timeout": 60,
-        "retry_attempts": 3
+        "retry_attempts": 3,
+        "enabled": False,
+    },
+    "OPEN_METEO": {
+        "base_url": "https://archive-api.open-meteo.com/v1",
+        "endpoints": {
+            "archive": "/archive",
+        },
+        "timeout": 45,
+        "retry_attempts": 3,
+        "enabled": True,
     },
     "WORLD_BANK": {
         "base_url": "https://api.worldbank.org/v2",
@@ -234,7 +245,8 @@ CLIMATE_SCENARIOS = {
 # ============================================================================
 
 DATA_CONFIG = {
-    "mock_data_enabled": True,  # Set to False for real API calls
+    # Deprecated mirror of data_policy live-first default (kept for older callers).
+    "mock_data_enabled": False,  # Production default: live APIs
     "mock_data_path": "data/",
     "cache_dir": os.environ.get("CATIA_CACHE_DIR", "data/cache"),
     "cache_ttl_seconds": int(os.environ.get("CATIA_CACHE_TTL", "86400")),  # 24h default

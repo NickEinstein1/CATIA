@@ -35,7 +35,7 @@ class RunSpec(BaseModel):
 
     region: str = "US_Gulf_Coast"
     perils: List[str] = Field(default_factory=lambda: list(DEFAULT_PERILS))
-    use_mock_data: bool = True
+    use_mock_data: bool = False
     scenario_id: Optional[str] = None
     monte_carlo_iterations: Optional[int] = Field(
         default=None,
@@ -123,6 +123,7 @@ def merge_cli_run_spec(
     region: Optional[str] = None,
     perils: Optional[List[str]] = None,
     no_mock_data: bool = False,
+    mock_data: bool = False,
     output_dir: Optional[str] = None,
     scenario_id: Optional[str] = None,
     monte_carlo_iterations: Optional[int] = None,
@@ -154,7 +155,9 @@ def merge_cli_run_spec(
     if explain is not None:
         updates["explain"] = explain
 
-    use_mock = spec.use_mock_data
+    use_mock = bool(spec.use_mock_data)
+    if mock_data:
+        use_mock = True
     if no_mock_data:
         use_mock = False
     updates["use_mock_data"] = use_mock
